@@ -14,7 +14,8 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:model"))
     implementation(project(":core:location"))
-    // MapLibre goes here when the visual map view is wired (deferred).
+    implementation(libs.maplibre.android)
+    implementation(libs.maplibre.annotation)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
