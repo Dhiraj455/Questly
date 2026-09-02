@@ -9,6 +9,8 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+# Ignore build output in every module, not just the root.
+build/
 /captures
 .externalNativeBuild
 .cxx

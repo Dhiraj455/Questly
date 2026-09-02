@@ -1,1 +1,0 @@
-com.example.questly.core.model
