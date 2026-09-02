@@ -29,4 +29,5 @@ include(":core:model")
 include(":core:database")
 include(":core:data")
 include(":core:location")
+include(":feature:checkin")
  
