@@ -26,4 +26,5 @@ dependencyResolutionManagement {
 rootProject.name = "Questly"
 include(":app")
 include(":core:model")
+include(":core:database")
  
