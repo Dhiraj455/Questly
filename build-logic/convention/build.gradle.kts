@@ -6,7 +6,6 @@ group = "com.example.questly.buildlogic"
 
 dependencies {
     compileOnly(libs.plugins.android.library.toDep())
-    compileOnly(libs.plugins.kotlin.android.toDep())
 }
 
 fun Provider<PluginDependency>.toDep() = map {
