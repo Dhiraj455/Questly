@@ -54,6 +54,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(project(":feature:map"))
     implementation(project(":feature:checkin"))
+    // Force the 16 KB-aligned native lib (libandroidx.graphics.path.so).
+    implementation(libs.androidx.graphics.path)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

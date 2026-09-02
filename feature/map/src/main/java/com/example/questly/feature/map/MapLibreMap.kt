@@ -30,29 +30,10 @@ import org.maplibre.android.plugins.annotation.SymbolOptions
 
 private const val MARKER_ICON = "questly-marker"
 
-// Free OpenStreetMap raster tiles — no API key, no billing account.
-// ponytail: OSM's public tile servers are fine for dev/demo; a real product
-// should use a keyed provider (MapTiler/Stadia) to respect OSM's tile policy.
-private val OSM_STYLE_JSON = """
-{
-  "version": 8,
-  "sources": {
-    "osm": {
-      "type": "raster",
-      "tiles": [
-        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      ],
-      "tileSize": 256,
-      "attribution": "© OpenStreetMap contributors"
-    }
-  },
-  "layers": [
-    { "id": "osm", "type": "raster", "source": "osm" }
-  ]
-}
-""".trimIndent()
+// OpenFreeMap: free, no API key, no signup, meant for production app use.
+// (OSM's own tile servers 403-block app traffic, so they can't be used directly.)
+// Vector tiles — MapLibre's native strength. Alternatives: ".../styles/positron", ".../styles/bright".
+private const val OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty"
 
 /**
  * MapLibre map showing an OSM basemap with a marker per checkpoint. Tapping a
@@ -77,7 +58,7 @@ fun MapLibreMap(
     LaunchedEffect(mapView) {
         mapView.getMapAsync { m ->
             map = m
-            m.setStyle(Style.Builder().fromJson(OSM_STYLE_JSON)) { style ->
+            m.setStyle(Style.Builder().fromUri(OPENFREEMAP_STYLE)) { style ->
                 style.addImage(MARKER_ICON, markerBitmap())
                 symbolManager = SymbolManager(mapView, m, style).apply {
                     iconAllowOverlap = true
