@@ -1,6 +1,5 @@
 package com.example.questly.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -12,33 +11,56 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = TealPrimaryDark,
+    onPrimary = TealOnPrimaryDark,
+    primaryContainer = TealPrimaryContainerDark,
+    onPrimaryContainer = TealOnPrimaryContainerDark,
+    secondary = AmberSecondaryDark,
+    onSecondary = AmberOnSecondaryDark,
+    secondaryContainer = AmberSecondaryContainerDark,
+    onSecondaryContainer = AmberOnSecondaryContainerDark,
+    tertiary = CoralTertiaryDark,
+    onTertiary = CoralOnTertiaryDark,
+    tertiaryContainer = CoralTertiaryContainerDark,
+    onTertiaryContainer = CoralOnTertiaryContainerDark,
+    background = DarkBackground,
+    onBackground = DarkOnBackground,
+    surface = DarkSurface,
+    onSurface = DarkOnSurface,
+    surfaceVariant = DarkSurfaceVariant,
+    onSurfaceVariant = DarkOnSurfaceVariant,
+    outline = DarkOutline,
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = TealPrimary,
+    onPrimary = TealOnPrimary,
+    primaryContainer = TealPrimaryContainer,
+    onPrimaryContainer = TealOnPrimaryContainer,
+    secondary = AmberSecondary,
+    onSecondary = AmberOnSecondary,
+    secondaryContainer = AmberSecondaryContainer,
+    onSecondaryContainer = AmberOnSecondaryContainer,
+    tertiary = CoralTertiary,
+    onTertiary = CoralOnTertiary,
+    tertiaryContainer = CoralTertiaryContainer,
+    onTertiaryContainer = CoralOnTertiaryContainer,
+    background = LightBackground,
+    onBackground = LightOnBackground,
+    surface = LightSurface,
+    onSurface = LightOnSurface,
+    surfaceVariant = LightSurfaceVariant,
+    onSurfaceVariant = LightOnSurfaceVariant,
+    outline = LightOutline,
 )
 
 @Composable
 fun QuestlyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
+    // Off by default so the Questly brand palette shows consistently.
+    // Flip to true to opt into Android 12+ wallpaper-based dynamic color.
+    dynamicColor: Boolean = false,
+    content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
@@ -53,6 +75,6 @@ fun QuestlyTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
-        content = content
+        content = content,
     )
 }
