@@ -15,4 +15,8 @@ class LocalCheckpointRepository @Inject constructor(
     override suspend fun ensureSeeded() {
         checkpointDao.upsertAll(SEED_CHECKPOINTS)
     }
+
+    override suspend fun ensureSeededNear(lat: Double, lng: Double) {
+        checkpointDao.upsertAll(demoCheckpointsNear(lat, lng))
+    }
 }

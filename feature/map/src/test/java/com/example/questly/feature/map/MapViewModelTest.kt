@@ -34,6 +34,7 @@ class MapViewModelTest {
         val flow = MutableStateFlow(cps)
         override fun observeCheckpoints(): Flow<List<Checkpoint>> = flow
         override suspend fun ensureSeeded() {}
+        override suspend fun ensureSeededNear(lat: Double, lng: Double) {}
     }
     private class FakeCheckInRepo : CheckInRepository {
         override fun observeCheckIns(): Flow<List<CheckIn>> = MutableStateFlow(emptyList())
@@ -62,6 +63,22 @@ class MapViewModelTest {
             var s = awaitItem()
             while (s.userLocation == null || s.checkpoints.isEmpty()) s = awaitItem()
             assertEquals(false, s.checkpoints.single().withinRange)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test fun checkpointsAreSortedByDistanceWithDistancePopulated() = runTest {
+        val far = Checkpoint("far", "Far", "", 55.0, -3.0, 150.0, 10, CheckpointKind.CHALLENGE)
+        val vm = MapViewModel(
+            FakeCheckpointRepo(listOf(far, park)), // far first in the source list
+            FakeCheckInRepo(),
+            FakeLocation(UserLocation(51.5073, -0.1657)), // right at 'park'
+        )
+        vm.state.test {
+            var s = awaitItem()
+            while (s.userLocation == null || s.checkpoints.size < 2) s = awaitItem()
+            assertEquals("hyde-park", s.checkpoints.first().checkpoint.id) // nearest first
+            assertEquals(true, s.checkpoints.all { it.distanceMeters != null })
             cancelAndIgnoreRemainingEvents()
         }
     }

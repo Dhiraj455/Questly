@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.questly.core.location.UserLocation
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
@@ -46,6 +47,7 @@ fun MapLibreMap(
     userLocation: UserLocation?,
     onMarkerClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    focus: FocusTarget? = null,
 ) {
     val mapView = rememberMapViewWithLifecycle()
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -99,6 +101,13 @@ fun MapLibreMap(
                 .build()
             didCenter = true
         }
+    }
+
+    // Fly to a challenge when the user taps it in the list.
+    LaunchedEffect(map, focus) {
+        val m = map ?: return@LaunchedEffect
+        val f = focus ?: return@LaunchedEffect
+        m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(f.lat, f.lng), 15.0))
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
