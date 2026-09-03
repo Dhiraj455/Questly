@@ -14,4 +14,7 @@ interface CheckpointDao {
 
     @Query("SELECT * FROM checkpoints WHERE id = :id")
     suspend fun getById(id: String): CheckpointEntity?
+
+    @Query("DELETE FROM checkpoints")
+    suspend fun deleteAll()
 }

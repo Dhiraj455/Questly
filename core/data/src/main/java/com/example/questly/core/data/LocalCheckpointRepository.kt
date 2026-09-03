@@ -13,6 +13,10 @@ class LocalCheckpointRepository @Inject constructor(
         checkpointDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
     override suspend fun ensureSeeded() {
+        // Authoritative: the seed list is the source of truth, so clear any
+        // previously-seeded rows before inserting. ponytail: fine while all
+        // checkpoints are seed data; revisit if user-created checkpoints appear.
+        checkpointDao.deleteAll()
         checkpointDao.upsertAll(SEED_CHECKPOINTS)
     }
 }

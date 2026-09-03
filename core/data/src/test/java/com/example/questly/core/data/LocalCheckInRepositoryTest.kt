@@ -19,6 +19,7 @@ class LocalCheckInRepositoryTest {
         override suspend fun upsertAll(items: List<CheckpointEntity>) {}
         override fun observeAll(): Flow<List<CheckpointEntity>> = MutableStateFlow(items)
         override suspend fun getById(id: String) = items.firstOrNull { it.id == id }
+        override suspend fun deleteAll() {}
     }
 
     private class FakeCheckInDao : CheckInDao {
