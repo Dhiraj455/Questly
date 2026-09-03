@@ -34,7 +34,6 @@ class MapViewModelTest {
         val flow = MutableStateFlow(cps)
         override fun observeCheckpoints(): Flow<List<Checkpoint>> = flow
         override suspend fun ensureSeeded() {}
-        override suspend fun ensureSeededNear(lat: Double, lng: Double) {}
     }
     private class FakeCheckInRepo : CheckInRepository {
         override fun observeCheckIns(): Flow<List<CheckIn>> = MutableStateFlow(emptyList())

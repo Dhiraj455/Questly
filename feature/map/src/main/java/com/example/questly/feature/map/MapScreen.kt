@@ -5,25 +5,32 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.PinDrop
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +51,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.questly.core.data.CheckInResult
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+private val SHEET_PEEK = 120.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,28 +66,27 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
     var focusSerial by remember { mutableIntStateOf(0) }
 
     val scaffoldState = rememberBottomSheetScaffoldState()
-    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
-    fun focusOn(cp: CheckpointUi) {
-        selectedId = cp.checkpoint.id
+    fun flyTo(cp: CheckpointUi) {
         focusSerial += 1
         focus = FocusTarget(cp.checkpoint.lat, cp.checkpoint.lng, focusSerial)
     }
 
+    fun checkIn(cp: CheckpointUi) {
+        viewModel.checkIn(cp.checkpoint.id) { result ->
+            Toast.makeText(context, result.message(), Toast.LENGTH_SHORT).show()
+        }
+    }
+
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
-        sheetPeekHeight = 200.dp,
+        sheetPeekHeight = SHEET_PEEK,
         sheetContent = {
             NearbySheet(
                 checkpoints = state.checkpoints,
-                selectedId = selectedId,
-                listState = listState,
-                onSelect = ::focusOn,
-                onCheckIn = { cp ->
-                    viewModel.checkIn(cp.checkpoint.id) { result ->
-                        Toast.makeText(context, result.message(), Toast.LENGTH_SHORT).show()
-                    }
-                },
+                onSelect = ::flyTo,
+                onCheckIn = ::checkIn,
             )
         },
     ) {
@@ -85,7 +95,12 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
                 checkpoints = state.checkpoints,
                 userLocation = state.userLocation,
                 onMarkerClick = { id ->
-                    state.checkpoints.firstOrNull { it.checkpoint.id == id }?.let { focusOn(it) }
+                    // Red-dot tap: select it, fly there, and drop the sheet so the card shows.
+                    state.checkpoints.firstOrNull { it.checkpoint.id == id }?.let {
+                        selectedId = id
+                        flyTo(it)
+                        scope.launch { scaffoldState.bottomSheetState.partialExpand() }
+                    }
                 },
                 focus = focus,
                 modifier = Modifier.fillMaxSize(),
@@ -96,36 +111,17 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
                     .align(Alignment.TopStart)
                     .padding(16.dp),
             )
-        }
-    }
-}
 
-@Composable
-private fun NearbySheet(
-    checkpoints: List<CheckpointUi>,
-    selectedId: String?,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    onSelect: (CheckpointUi) -> Unit,
-    onCheckIn: (CheckpointUi) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Text("Nearby challenges", style = MaterialTheme.typography.titleLarge)
-        Text(
-            "${checkpoints.size} within reach — sorted by distance",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        LazyColumn(
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
-        ) {
-            items(checkpoints, key = { it.checkpoint.id }) { item ->
-                ChallengeRow(
-                    item = item,
-                    selected = item.checkpoint.id == selectedId,
-                    onClick = { onSelect(item) },
-                    onCheckIn = { onCheckIn(item) },
+            val selected = state.checkpoints.firstOrNull { it.checkpoint.id == selectedId }
+            if (selected != null) {
+                CheckpointCard(
+                    item = selected,
+                    onCheckIn = { checkIn(selected) },
+                    onDismiss = { selectedId = null },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(start = 16.dp, end = 16.dp, bottom = SHEET_PEEK + 16.dp)
+                        .fillMaxWidth(),
                 )
             }
         }
@@ -133,18 +129,35 @@ private fun NearbySheet(
 }
 
 @Composable
-private fun ChallengeRow(
-    item: CheckpointUi,
-    selected: Boolean,
-    onClick: () -> Unit,
-    onCheckIn: () -> Unit,
+private fun NearbySheet(
+    checkpoints: List<CheckpointUi>,
+    onSelect: (CheckpointUi) -> Unit,
+    onCheckIn: (CheckpointUi) -> Unit,
 ) {
-    val container =
-        if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Text("Nearby challenges", style = MaterialTheme.typography.titleLarge)
+        Text(
+            if (checkpoints.isEmpty()) "Drag up to browse" else "${checkpoints.size} found — sorted by distance",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(vertical = 12.dp),
+        ) {
+            items(checkpoints, key = { it.checkpoint.id }) { item ->
+                ChallengeRow(item = item, onClick = { onSelect(item) }, onCheckIn = { onCheckIn(item) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChallengeRow(item: CheckpointUi, onClick: () -> Unit, onCheckIn: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
-        color = container,
+        color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -153,10 +166,7 @@ private fun ChallengeRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -168,37 +178,79 @@ private fun ChallengeRow(
             }
             Column(Modifier.weight(1f)) {
                 Text(item.checkpoint.title, style = MaterialTheme.typography.titleMedium)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (item.withinRange) {
-                        Icon(
-                            Icons.Filled.MyLocation,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
-                    Text(
-                        distanceLabel(item),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Icon(
-                        Icons.Filled.EmojiEvents,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Text(
-                        "${item.checkpoint.points}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    "${distanceLabel(item)} · ${item.checkpoint.points} pts",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             Button(onClick = onCheckIn, enabled = item.withinRange) {
                 Text("Check in", fontWeight = FontWeight.SemiBold)
             }
+        }
+    }
+}
+
+@Composable
+private fun CheckpointCard(
+    item: CheckpointUi,
+    onCheckIn: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier,
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    item.checkpoint.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close")
+                }
+            }
+            Text(
+                item.checkpoint.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip(Icons.Filled.EmojiEvents, "${item.checkpoint.points} pts", accent = true)
+                Chip(
+                    if (item.withinRange) Icons.Filled.MyLocation else Icons.Filled.NearMe,
+                    distanceLabel(item),
+                    accent = item.withinRange,
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onCheckIn, enabled = item.withinRange, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    if (item.withinRange) "Check in" else "Move closer to check in",
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Chip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, accent: Boolean) {
+    val bg = if (accent) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    val fg = if (accent) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(shape = RoundedCornerShape(50), color = bg) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge, color = fg)
         }
     }
 }
