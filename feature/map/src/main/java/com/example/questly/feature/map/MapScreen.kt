@@ -54,8 +54,8 @@ import com.example.questly.core.data.CheckInResult
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-// Peek shows only the header + drag handle; the list stays below the fold until dragged up.
-private val SHEET_PEEK = 92.dp
+// Collapsed peek shows ONLY the drag handle; header + list appear on drag-up.
+private val SHEET_PEEK = 40.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
