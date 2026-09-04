@@ -54,7 +54,8 @@ import com.example.questly.core.data.CheckInResult
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val SHEET_PEEK = 120.dp
+// Peek shows only the header + drag handle; the list stays below the fold until dragged up.
+private val SHEET_PEEK = 92.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,7 +144,9 @@ private fun NearbySheet(
         )
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(vertical = 12.dp),
+            // Top padding keeps the first row below the collapsed-peek fold; bottom
+            // padding clears the app nav bar when the sheet is expanded.
+            contentPadding = PaddingValues(top = 20.dp, bottom = 32.dp),
         ) {
             items(checkpoints, key = { it.checkpoint.id }) { item ->
                 ChallengeRow(item = item, onClick = { onSelect(item) }, onCheckIn = { onCheckIn(item) })
