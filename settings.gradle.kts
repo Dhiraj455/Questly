@@ -29,6 +29,8 @@ include(":core:model")
 include(":core:database")
 include(":core:data")
 include(":core:location")
+include(":core:network")
 include(":feature:checkin")
 include(":feature:map")
+include(":feature:discover")
  

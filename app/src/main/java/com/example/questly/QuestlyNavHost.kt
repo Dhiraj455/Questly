@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.LocalActivity
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.LocalActivity
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,10 +23,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.questly.feature.checkin.PointsScreen
+import com.example.questly.feature.discover.DiscoverScreen
 import com.example.questly.feature.map.MapScreen
 
 private enum class Tab(val label: String, val selectedIcon: ImageVector, val icon: ImageVector) {
     Explore("Explore", Icons.Filled.Explore, Icons.Outlined.Explore),
+    Discover("Discover", Icons.Filled.LocalActivity, Icons.Outlined.LocalActivity),
     Rewards("Rewards", Icons.Filled.EmojiEvents, Icons.Outlined.EmojiEvents),
 }
 
@@ -57,6 +61,7 @@ fun QuestlyNavHost() {
         ) {
             when (Tab.entries[current]) {
                 Tab.Explore -> MapScreen()
+                Tab.Discover -> DiscoverScreen()
                 Tab.Rewards -> PointsScreen()
             }
         }

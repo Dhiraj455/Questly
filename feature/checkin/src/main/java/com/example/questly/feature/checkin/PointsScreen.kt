@@ -134,13 +134,22 @@ private fun CheckInRow(checkIn: CheckIn) {
                 )
             }
             Column(Modifier.weight(1f)) {
-                Text(prettify(checkIn.checkpointId), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    checkIn.title.ifBlank { "Checkpoint" },
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 Text(
                     DateUtils.getRelativeTimeSpanString(checkIn.timestampMillis).toString(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Text(
+                "+${checkIn.points}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }
@@ -172,6 +181,3 @@ private fun EmptyHistory() {
         }
     }
 }
-
-private fun prettify(id: String) =
-    id.split("-").joinToString(" ") { it.replaceFirstChar(Char::uppercase) }

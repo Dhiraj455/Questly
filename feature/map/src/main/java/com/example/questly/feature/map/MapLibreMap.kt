@@ -29,7 +29,19 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.plugins.annotation.SymbolManager
 import org.maplibre.android.plugins.annotation.SymbolOptions
 
-private const val MARKER_ICON = "questly-marker"
+private const val USER_ICON = "questly-user"
+private const val DEFAULT_MARKER = "questly-marker"
+
+// Per-category marker colors (avoid the user puck's blue). Falls back to red for unknown types.
+private val MARKER_COLORS = linkedMapOf(
+    "PARK" to "#2E7D32",
+    "BEACH" to "#F9A825",
+    "VIEWPOINT" to "#6A1B9A",
+    "LANDMARK" to "#D32F2F",
+)
+
+private fun markerImageName(category: String) =
+    if (MARKER_COLORS.containsKey(category)) "questly-marker-$category" else DEFAULT_MARKER
 
 // OpenFreeMap: free, no API key, no signup, meant for production app use.
 // (OSM's own tile servers 403-block app traffic, so they can't be used directly.)
@@ -52,6 +64,7 @@ fun MapLibreMap(
     val mapView = rememberMapViewWithLifecycle()
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var symbolManager by remember { mutableStateOf<SymbolManager?>(null) }
+    var userSymbolManager by remember { mutableStateOf<SymbolManager?>(null) }
     val symbolToCheckpoint = remember { mutableMapOf<Long, String>() }
     var didCenter by remember { mutableStateOf(false) }
     val currentOnMarkerClick by rememberUpdatedState(onMarkerClick)
@@ -61,7 +74,11 @@ fun MapLibreMap(
         mapView.getMapAsync { m ->
             map = m
             m.setStyle(Style.Builder().fromUri(OPENFREEMAP_STYLE)) { style ->
-                style.addImage(MARKER_ICON, markerBitmap())
+                style.addImage(DEFAULT_MARKER, markerBitmap(Color.parseColor("#D32F2F")))
+                MARKER_COLORS.forEach { (cat, hex) ->
+                    style.addImage("questly-marker-$cat", markerBitmap(Color.parseColor(hex)))
+                }
+                style.addImage(USER_ICON, userLocationBitmap())
                 symbolManager = SymbolManager(mapView, m, style).apply {
                     iconAllowOverlap = true
                     iconIgnorePlacement = true
@@ -69,6 +86,12 @@ fun MapLibreMap(
                         symbolToCheckpoint[symbol.id]?.let(currentOnMarkerClick)
                         true
                     }
+                }
+                // Separate manager so the checkpoint rebuild's deleteAll() never clears the
+                // user dot, and the dot always draws on top.
+                userSymbolManager = SymbolManager(mapView, m, style).apply {
+                    iconAllowOverlap = true
+                    iconIgnorePlacement = true
                 }
             }
         }
@@ -83,11 +106,24 @@ fun MapLibreMap(
             val symbol = mgr.create(
                 SymbolOptions()
                     .withLatLng(LatLng(item.checkpoint.lat, item.checkpoint.lng))
-                    .withIconImage(MARKER_ICON)
+                    .withIconImage(markerImageName(item.checkpoint.category))
                     .withIconSize(1.2f),
             )
             symbolToCheckpoint[symbol.id] = item.checkpoint.id
         }
+    }
+
+    // Draw / move the user's current-location dot.
+    LaunchedEffect(userSymbolManager, userLocation) {
+        val mgr = userSymbolManager ?: return@LaunchedEffect
+        mgr.deleteAll()
+        val loc = userLocation ?: return@LaunchedEffect
+        mgr.create(
+            SymbolOptions()
+                .withLatLng(LatLng(loc.lat, loc.lng))
+                .withIconImage(USER_ICON)
+                .withIconSize(1.0f),
+        )
     }
 
     // Center on the first location fix, then let the user pan freely.
@@ -140,16 +176,32 @@ private fun rememberMapViewWithLifecycle(): MapView {
     return mapView
 }
 
-private fun markerBitmap(): Bitmap {
+private fun markerBitmap(fill: Int): Bitmap {
     val size = 48
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val r = size / 2f
-    canvas.drawCircle(r, r, r - 4, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#D32F2F") })
+    canvas.drawCircle(r, r, r - 4, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fill })
     canvas.drawCircle(r, r, r - 4, Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         style = Paint.Style.STROKE
         strokeWidth = 4f
     })
+    return bmp
+}
+
+/** A location "puck" — blue dot, white ring, soft accuracy halo — for the user's current location. */
+private fun userLocationBitmap(): Bitmap {
+    val size = 72
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val r = size / 2f
+    val blue = Color.parseColor("#1E88E5")
+    // Soft translucent halo so the dot reads as "you" and stands apart from the red quest pins.
+    canvas.drawCircle(r, r, r - 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = blue; alpha = 45 })
+    // White ring (border).
+    canvas.drawCircle(r, r, 18f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
+    // Solid blue center.
+    canvas.drawCircle(r, r, 12f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = blue })
     return bmp
 }

@@ -6,7 +6,6 @@ import com.example.questly.core.database.CheckpointDao
 import com.example.questly.core.model.CheckIn
 import com.example.questly.core.model.distanceMeters
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 import javax.inject.Inject
@@ -20,10 +19,9 @@ class LocalCheckInRepository @Inject constructor(
         checkInDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
     override fun observePoints(): Flow<Int> =
-        combine(checkInDao.observeAll(), checkpointDao.observeAll()) { checkIns, checkpoints ->
-            val pointsById = checkpoints.associate { it.id to it.points }
-            checkIns.sumOf { pointsById[it.checkpointId] ?: 0 }
-        }
+        // Sum the points snapshotted on each check-in, so a later checkpoint-cache refresh can't
+        // change past earnings.
+        checkInDao.observeAll().map { checkIns -> checkIns.sumOf { it.points } }
 
     override suspend fun recordCheckIn(
         checkpointId: String,
@@ -35,7 +33,15 @@ class LocalCheckInRepository @Inject constructor(
         if (distanceMeters(userLat, userLng, cp.lat, cp.lng) > cp.radiusMeters) return CheckInResult.TooFar
         val last = checkInDao.lastForCheckpoint(checkpointId)
         if (last != null && nowMillis - last.timestampMillis < CHECK_IN_COOLDOWN_MILLIS) return CheckInResult.OnCooldown
-        checkInDao.insert(CheckInEntity(UUID.randomUUID().toString(), checkpointId, nowMillis))
+        checkInDao.insert(
+            CheckInEntity(
+                id = UUID.randomUUID().toString(),
+                checkpointId = checkpointId,
+                timestampMillis = nowMillis,
+                title = cp.title,
+                points = cp.points,
+            ),
+        )
         return CheckInResult.Success
     }
 }

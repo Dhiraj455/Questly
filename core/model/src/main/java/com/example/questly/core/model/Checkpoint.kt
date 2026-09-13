@@ -11,4 +11,5 @@ data class Checkpoint(
     val radiusMeters: Double,
     val points: Int,
     val kind: CheckpointKind,
+    val category: String = "", // POI type: PARK / BEACH / VIEWPOINT / LANDMARK
 )

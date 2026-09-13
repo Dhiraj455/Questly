@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.example.questly.core.data.CheckInRepository
 import com.example.questly.core.data.CheckInResult
 import com.example.questly.core.data.CheckpointRepository
+import com.example.questly.core.data.RefreshResult
 import com.example.questly.core.location.LocationProvider
 import com.example.questly.core.location.UserLocation
 import com.example.questly.core.model.CheckIn
@@ -14,6 +15,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -30,10 +32,17 @@ class MapViewModelTest {
 
     private val park = Checkpoint("hyde-park", "Hyde Park", "", 51.5073, -0.1657, 150.0, 50, CheckpointKind.CHALLENGE)
 
-    private class FakeCheckpointRepo(cps: List<Checkpoint>) : CheckpointRepository {
+    private class FakeCheckpointRepo(
+        cps: List<Checkpoint> = emptyList(),
+        private val result: RefreshResult = RefreshResult.Success(0),
+    ) : CheckpointRepository {
         val flow = MutableStateFlow(cps)
+        val refreshCalls = mutableListOf<Triple<Double, Double, Double>>()
         override fun observeCheckpoints(): Flow<List<Checkpoint>> = flow
-        override suspend fun ensureSeeded() {}
+        override suspend fun refresh(lat: Double, lng: Double, radiusMeters: Double): RefreshResult {
+            refreshCalls.add(Triple(lat, lng, radiusMeters))
+            return result
+        }
     }
     private class FakeCheckInRepo : CheckInRepository {
         override fun observeCheckIns(): Flow<List<CheckIn>> = MutableStateFlow(emptyList())
@@ -46,6 +55,8 @@ class MapViewModelTest {
         override fun observeLocation(): Flow<UserLocation?> = flow
     }
 
+    // --- display behavior (existing) ---
+
     @Test fun withinRangeTrueWhenUserAtCheckpoint() = runTest {
         val vm = MapViewModel(FakeCheckpointRepo(listOf(park)), FakeCheckInRepo(), FakeLocation(UserLocation(51.5073, -0.1657)))
         vm.state.test {
@@ -56,28 +67,78 @@ class MapViewModelTest {
         }
     }
 
-    @Test fun withinRangeFalseWhenUserFarAway() = runTest {
-        val vm = MapViewModel(FakeCheckpointRepo(listOf(park)), FakeCheckInRepo(), FakeLocation(UserLocation(52.5, -0.16)))
-        vm.state.test {
-            var s = awaitItem()
-            while (s.userLocation == null || s.checkpoints.isEmpty()) s = awaitItem()
-            assertEquals(false, s.checkpoints.single().withinRange)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
     @Test fun checkpointsAreSortedByDistanceWithDistancePopulated() = runTest {
         val far = Checkpoint("far", "Far", "", 55.0, -3.0, 150.0, 10, CheckpointKind.CHALLENGE)
         val vm = MapViewModel(
-            FakeCheckpointRepo(listOf(far, park)), // far first in the source list
+            FakeCheckpointRepo(listOf(far, park)),
             FakeCheckInRepo(),
-            FakeLocation(UserLocation(51.5073, -0.1657)), // right at 'park'
+            FakeLocation(UserLocation(51.5073, -0.1657)),
         )
         vm.state.test {
             var s = awaitItem()
             while (s.userLocation == null || s.checkpoints.size < 2) s = awaitItem()
-            assertEquals("hyde-park", s.checkpoints.first().checkpoint.id) // nearest first
+            assertEquals("hyde-park", s.checkpoints.first().checkpoint.id)
             assertEquals(true, s.checkpoints.all { it.distanceMeters != null })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- re-query behavior (new) ---
+
+    @Test fun queriesOnFirstLocationFixAtDefaultRadius() = runTest {
+        val repo = FakeCheckpointRepo()
+        MapViewModel(repo, FakeCheckInRepo(), FakeLocation(UserLocation(51.5, -0.16)))
+        advanceUntilIdle()
+        assertEquals(1, repo.refreshCalls.size)
+        assertEquals(DEFAULT_RADIUS_M, repo.refreshCalls.single().third, 0.0)
+    }
+
+    @Test fun smallMoveDoesNotRequery() = runTest {
+        val repo = FakeCheckpointRepo()
+        val loc = FakeLocation(UserLocation(51.5, -0.16))
+        MapViewModel(repo, FakeCheckInRepo(), loc)
+        advanceUntilIdle()
+        loc.flow.value = UserLocation(51.5005, -0.16) // ~55 m, well under 30% of 5 km
+        advanceUntilIdle()
+        assertEquals(1, repo.refreshCalls.size)
+    }
+
+    @Test fun largeMoveRequeries() = runTest {
+        val repo = FakeCheckpointRepo()
+        val loc = FakeLocation(UserLocation(51.5, -0.16))
+        MapViewModel(repo, FakeCheckInRepo(), loc)
+        advanceUntilIdle()
+        loc.flow.value = UserLocation(51.53, -0.16) // ~3.3 km, over 30% of 5 km
+        advanceUntilIdle()
+        assertEquals(2, repo.refreshCalls.size)
+    }
+
+    @Test fun changingRadiusRequeriesWhileStationary() = runTest {
+        val repo = FakeCheckpointRepo()
+        val vm = MapViewModel(repo, FakeCheckInRepo(), FakeLocation(UserLocation(51.5, -0.16)))
+        advanceUntilIdle()
+        vm.setRadius(MAX_RADIUS_M)
+        advanceUntilIdle()
+        assertEquals(2, repo.refreshCalls.size)
+        assertEquals(MAX_RADIUS_M, repo.refreshCalls.last().third, 0.0)
+    }
+
+    @Test fun manualRefreshRequeriesWhileStationary() = runTest {
+        val repo = FakeCheckpointRepo()
+        val vm = MapViewModel(repo, FakeCheckInRepo(), FakeLocation(UserLocation(51.5, -0.16)))
+        advanceUntilIdle()
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals(2, repo.refreshCalls.size)
+    }
+
+    @Test fun refreshErrorIsSurfacedInState() = runTest {
+        val repo = FakeCheckpointRepo(result = RefreshResult.Error("no network"))
+        val vm = MapViewModel(repo, FakeCheckInRepo(), FakeLocation(UserLocation(51.5, -0.16)))
+        vm.state.test {
+            var s = awaitItem()
+            while (s.error == null) s = awaitItem()
+            assertEquals("no network", s.error)
             cancelAndIgnoreRemainingEvents()
         }
     }

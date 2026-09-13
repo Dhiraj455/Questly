@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -21,22 +24,30 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NearMe
-import androidx.compose.material.icons.filled.PinDrop
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +68,9 @@ import kotlin.math.roundToInt
 // Collapsed peek shows ONLY the drag handle; header + list appear on drag-up.
 private val SHEET_PEEK = 40.dp
 
+// Fully-expanded sheet tops out here, leaving a map strip + status bar visible above it.
+private const val SHEET_MAX_FRACTION = 0.8f
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
@@ -66,12 +80,25 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
     var focus by remember { mutableStateOf<FocusTarget?>(null) }
     var focusSerial by remember { mutableIntStateOf(0) }
 
+    // Type filter: empty set == "All". Only categories actually present get a checkbox.
+    var selectedCategories by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val availableCategories = state.checkpoints
+        .map { it.checkpoint.category }.filter { it.isNotBlank() }.distinct().sorted()
+    val visibleCheckpoints = if (selectedCategories.isEmpty()) state.checkpoints
+    else state.checkpoints.filter { it.checkpoint.category in selectedCategories }
+
     val scaffoldState = rememberBottomSheetScaffoldState()
     val scope = rememberCoroutineScope()
 
     fun flyTo(cp: CheckpointUi) {
         focusSerial += 1
         focus = FocusTarget(cp.checkpoint.lat, cp.checkpoint.lng, focusSerial)
+    }
+
+    fun recenter() {
+        val loc = state.userLocation ?: return
+        focusSerial += 1
+        focus = FocusTarget(loc.lat, loc.lng, focusSerial)
     }
 
     fun checkIn(cp: CheckpointUi) {
@@ -85,7 +112,19 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
         sheetPeekHeight = SHEET_PEEK,
         sheetContent = {
             NearbySheet(
-                checkpoints = state.checkpoints,
+                checkpoints = visibleCheckpoints,
+                radiusMeters = state.radiusMeters,
+                isLoading = state.isLoading,
+                error = state.error,
+                availableCategories = availableCategories,
+                selectedCategories = selectedCategories,
+                onToggleCategory = { cat ->
+                    selectedCategories =
+                        if (cat in selectedCategories) selectedCategories - cat else selectedCategories + cat
+                },
+                onSelectAllCategories = { selectedCategories = emptySet() },
+                onRadiusChange = viewModel::setRadius,
+                onRefresh = viewModel::refresh,
                 onSelect = ::flyTo,
                 onCheckIn = ::checkIn,
             )
@@ -93,7 +132,7 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
     ) {
         Box(Modifier.fillMaxSize()) {
             MapLibreMap(
-                checkpoints = state.checkpoints,
+                checkpoints = visibleCheckpoints,
                 userLocation = state.userLocation,
                 onMarkerClick = { id ->
                     // Red-dot tap: select it, fly there, and drop the sheet so the card shows.
@@ -107,11 +146,24 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
                 modifier = Modifier.fillMaxSize(),
             )
             BrandPill(
-                count = state.checkpoints.size,
+                count = visibleCheckpoints.size,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(16.dp),
             )
+
+            if (state.userLocation != null) {
+                FloatingActionButton(
+                    onClick = ::recenter,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = SHEET_PEEK + 16.dp),
+                ) {
+                    Icon(Icons.Filled.MyLocation, contentDescription = "Recenter on my location")
+                }
+            }
 
             val selected = state.checkpoints.firstOrNull { it.checkpoint.id == selectedId }
             if (selected != null) {
@@ -132,26 +184,119 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
 @Composable
 private fun NearbySheet(
     checkpoints: List<CheckpointUi>,
+    radiusMeters: Double,
+    isLoading: Boolean,
+    error: String?,
+    availableCategories: List<String>,
+    selectedCategories: Set<String>,
+    onToggleCategory: (String) -> Unit,
+    onSelectAllCategories: () -> Unit,
+    onRadiusChange: (Double) -> Unit,
+    onRefresh: () -> Unit,
     onSelect: (CheckpointUi) -> Unit,
     onCheckIn: (CheckpointUi) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Text("Nearby challenges", style = MaterialTheme.typography.titleLarge)
-        Text(
-            if (checkpoints.isEmpty()) "Drag up to browse" else "${checkpoints.size} found — sorted by distance",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    Column(
+        Modifier
+            .fillMaxWidth()
+            // Cap expansion so a strip of map + the status bar stay visible above the sheet.
+            .fillMaxHeight(SHEET_MAX_FRACTION)
+            .navigationBarsPadding() // keep content clear of the system nav bar
+            .padding(horizontal = 16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Nearby challenges", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    when {
+                        isLoading -> "Finding quests…"
+                        error != null -> "Couldn't refresh — showing last results"
+                        checkpoints.isEmpty() -> "No quests here — widen the radius or refresh"
+                        else -> "${checkpoints.size} found — sorted by distance"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (error != null && !isLoading) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (availableCategories.isNotEmpty()) {
+                TypeFilterButton(
+                    availableCategories = availableCategories,
+                    selectedCategories = selectedCategories,
+                    onToggleCategory = onToggleCategory,
+                    onSelectAllCategories = onSelectAllCategories,
+                )
+            }
+            if (isLoading) {
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            } else {
+                IconButton(onClick = onRefresh) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh quests")
+                }
+            }
+        }
+        RadiusSlider(radiusMeters = radiusMeters, onRadiusChange = onRadiusChange)
         LazyColumn(
+            modifier = Modifier.weight(1f), // scroll within the capped sheet height
             verticalArrangement = Arrangement.spacedBy(8.dp),
             // Top padding keeps the first row below the collapsed-peek fold; bottom
             // padding clears the app nav bar when the sheet is expanded.
-            contentPadding = PaddingValues(top = 20.dp, bottom = 32.dp),
+            contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp),
         ) {
             items(checkpoints, key = { it.checkpoint.id }) { item ->
                 ChallengeRow(item = item, onClick = { onSelect(item) }, onCheckIn = { onCheckIn(item) })
             }
         }
+    }
+}
+
+@Composable
+private fun TypeFilterButton(
+    availableCategories: List<String>,
+    selectedCategories: Set<String>,
+    onToggleCategory: (String) -> Unit,
+    onSelectAllCategories: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Filled.FilterList, contentDescription = "Filter by type")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("All types") },
+                onClick = onSelectAllCategories,
+                leadingIcon = { Checkbox(checked = selectedCategories.isEmpty(), onCheckedChange = null) },
+            )
+            availableCategories.forEach { cat ->
+                DropdownMenuItem(
+                    text = { Text(categoryLabel(cat)) },
+                    onClick = { onToggleCategory(cat) },
+                    leadingIcon = { Checkbox(checked = cat in selectedCategories, onCheckedChange = null) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RadiusSlider(radiusMeters: Double, onRadiusChange: (Double) -> Unit) {
+    // Drag updates only the local position; we query on release so a single drag
+    // doesn't fire a dozen Overpass calls.
+    var meters by remember(radiusMeters) { mutableFloatStateOf(radiusMeters.toFloat()) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            "%.0f km".format(meters / 1000),
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.width(56.dp),
+        )
+        Slider(
+            value = meters,
+            onValueChange = { meters = it },
+            onValueChangeFinished = { onRadiusChange(meters.toDouble()) },
+            valueRange = MIN_RADIUS_M.toFloat()..MAX_RADIUS_M.toFloat(),
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -173,8 +318,8 @@ private fun ChallengeRow(item: CheckpointUi, onClick: () -> Unit, onCheckIn: () 
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Filled.PinDrop,
-                    contentDescription = null,
+                    categoryIcon(item.checkpoint.category),
+                    contentDescription = categoryLabel(item.checkpoint.category),
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(24.dp),
                 )

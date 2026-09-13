@@ -15,11 +15,12 @@ class LocalCheckInRepositoryTest {
 
     private val park = CheckpointEntity("park-1", "Park", "", 51.5, -0.12, 100.0, 50, "CHALLENGE")
 
-    private class FakeCheckpointDao(private val items: List<CheckpointEntity>) : CheckpointDao {
-        override suspend fun upsertAll(items: List<CheckpointEntity>) {}
-        override fun observeAll(): Flow<List<CheckpointEntity>> = MutableStateFlow(items)
-        override suspend fun getById(id: String) = items.firstOrNull { it.id == id }
-        override suspend fun deleteAll() {}
+    private class FakeCheckpointDao(items: List<CheckpointEntity>) : CheckpointDao {
+        val rows = MutableStateFlow(items)
+        override suspend fun upsertAll(items: List<CheckpointEntity>) { rows.value = rows.value + items }
+        override fun observeAll(): Flow<List<CheckpointEntity>> = rows
+        override suspend fun getById(id: String) = rows.value.firstOrNull { it.id == id }
+        override suspend fun deleteAll() { rows.value = emptyList() }
     }
 
     private class FakeCheckInDao : CheckInDao {
@@ -57,6 +58,19 @@ class LocalCheckInRepositoryTest {
         r.recordCheckIn("park-1", 51.5, -0.12, nowMillis = 10_000L)
         val points = r.observePoints().first()
         assertEquals(50, points)
+    }
+
+    @Test fun titleAndPointsAreSnapshotAndSurviveCheckpointCacheWipe() = runTest {
+        val checkpointDao = FakeCheckpointDao(listOf(park)) // "Park", 50 pts
+        val r = LocalCheckInRepository(checkpointDao, FakeCheckInDao())
+        r.recordCheckIn("park-1", 51.5, -0.12, nowMillis = 10_000L)
+
+        checkpointDao.deleteAll() // an Overpass refresh wiped the checkpoint cache
+
+        assertEquals(50, r.observePoints().first()) // earnings unchanged
+        val entry = r.observeCheckIns().first().single()
+        assertEquals("Park", entry.title) // real title, not a raw id
+        assertEquals(50, entry.points)
     }
 
     @Test fun unknownCheckpointReported() = runTest {

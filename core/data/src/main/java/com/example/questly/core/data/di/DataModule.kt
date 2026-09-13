@@ -5,7 +5,7 @@ import androidx.room.Room
 import com.example.questly.core.data.CheckInRepository
 import com.example.questly.core.data.CheckpointRepository
 import com.example.questly.core.data.LocalCheckInRepository
-import com.example.questly.core.data.LocalCheckpointRepository
+import com.example.questly.core.data.RemoteCheckpointRepository
 import com.example.questly.core.database.CheckInDao
 import com.example.questly.core.database.CheckpointDao
 import com.example.questly.core.database.QuestlyDatabase
@@ -20,7 +20,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class DataBindingsModule {
-    @Binds abstract fun checkpointRepo(impl: LocalCheckpointRepository): CheckpointRepository
+    @Binds abstract fun checkpointRepo(impl: RemoteCheckpointRepository): CheckpointRepository
     @Binds abstract fun checkInRepo(impl: LocalCheckInRepository): CheckInRepository
 }
 
@@ -29,7 +29,11 @@ abstract class DataBindingsModule {
 object DataProvidesModule {
     @Provides @Singleton
     fun database(@ApplicationContext ctx: Context): QuestlyDatabase =
-        Room.databaseBuilder(ctx, QuestlyDatabase::class.java, "questly.db").build()
+        // Checkpoints are just a cache of Overpass results, so a schema change can safely wipe
+        // and re-fetch rather than carry migrations.
+        Room.databaseBuilder(ctx, QuestlyDatabase::class.java, "questly.db")
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
 
     @Provides fun checkpointDao(db: QuestlyDatabase): CheckpointDao = db.checkpointDao()
     @Provides fun checkInDao(db: QuestlyDatabase): CheckInDao = db.checkInDao()
