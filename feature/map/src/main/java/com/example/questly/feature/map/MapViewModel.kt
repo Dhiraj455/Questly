@@ -2,6 +2,7 @@ package com.example.questly.feature.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.questly.core.data.CHECK_IN_COOLDOWN_MILLIS
 import com.example.questly.core.data.CheckInRepository
 import com.example.questly.core.data.CheckInResult
 import com.example.questly.core.data.CheckpointRepository
@@ -10,6 +11,7 @@ import com.example.questly.core.location.LocationProvider
 import com.example.questly.core.location.UserLocation
 import com.example.questly.core.model.distanceMeters
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,15 +49,31 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    val state: StateFlow<MapUiState> =
-        combine(location, checkpointRepository.observeCheckpoints(), radiusMeters, isLoading, error) {
-                loc, checkpoints, radius, loading, err ->
-            val ui = checkpoints
+    // Builds the display list, marking a checkpoint checkedIn while its latest check-in is still
+    // within the cooldown window (matching the recordCheckIn rule, so the button stays disabled).
+    private val checkpointsUi: Flow<List<CheckpointUi>> =
+        combine(location, checkpointRepository.observeCheckpoints(), checkInRepository.observeCheckIns()) {
+                loc, checkpoints, checkIns ->
+            val now = System.currentTimeMillis()
+            val lastByCheckpoint = checkIns
+                .groupBy { it.checkpointId }
+                .mapValues { (_, rows) -> rows.maxOf { it.timestampMillis } }
+            checkpoints
                 .map { cp ->
                     val d = loc?.let { distanceMeters(it.lat, it.lng, cp.lat, cp.lng) }
-                    CheckpointUi(cp, withinRange = d != null && d <= cp.radiusMeters, distanceMeters = d)
+                    val last = lastByCheckpoint[cp.id]
+                    CheckpointUi(
+                        cp,
+                        withinRange = d != null && d <= cp.radiusMeters,
+                        distanceMeters = d,
+                        checkedIn = last != null && now - last < CHECK_IN_COOLDOWN_MILLIS,
+                    )
                 }
                 .sortedBy { it.distanceMeters ?: Double.MAX_VALUE }
+        }
+
+    val state: StateFlow<MapUiState> =
+        combine(checkpointsUi, location, radiusMeters, isLoading, error) { ui, loc, radius, loading, err ->
             MapUiState(loc, ui, radiusMeters = radius, isLoading = loading, error = err)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MapUiState())
 

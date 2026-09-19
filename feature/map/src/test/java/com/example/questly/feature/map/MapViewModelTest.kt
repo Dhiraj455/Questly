@@ -1,6 +1,7 @@
 package com.example.questly.feature.map
 
 import app.cash.turbine.test
+import com.example.questly.core.data.CHECK_IN_COOLDOWN_MILLIS
 import com.example.questly.core.data.CheckInRepository
 import com.example.questly.core.data.CheckInResult
 import com.example.questly.core.data.CheckpointRepository
@@ -44,8 +45,9 @@ class MapViewModelTest {
             return result
         }
     }
-    private class FakeCheckInRepo : CheckInRepository {
-        override fun observeCheckIns(): Flow<List<CheckIn>> = MutableStateFlow(emptyList())
+    private class FakeCheckInRepo(checkIns: List<CheckIn> = emptyList()) : CheckInRepository {
+        private val flow = MutableStateFlow(checkIns)
+        override fun observeCheckIns(): Flow<List<CheckIn>> = flow
         override fun observePoints(): Flow<Int> = MutableStateFlow(0)
         override suspend fun recordCheckIn(checkpointId: String, userLat: Double, userLng: Double, nowMillis: Long) =
             CheckInResult.Success
@@ -65,6 +67,28 @@ class MapViewModelTest {
             assertTrue(s.checkpoints.single().withinRange)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test fun checkedInTrueForRecentCheckInAndFalseForStaleOne() = runTest {
+        val now = System.currentTimeMillis()
+        val recent = CheckIn("c1", "hyde-park", now, "Hyde Park", 50)
+        val stale = CheckIn("c2", "hyde-park", now - CHECK_IN_COOLDOWN_MILLIS - 1, "Hyde Park", 50)
+
+        MapViewModel(FakeCheckpointRepo(listOf(park)), FakeCheckInRepo(listOf(recent)), FakeLocation(UserLocation(51.5073, -0.1657)))
+            .state.test {
+                var s = awaitItem()
+                while (s.checkpoints.isEmpty()) s = awaitItem()
+                assertTrue(s.checkpoints.single().checkedIn)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+        MapViewModel(FakeCheckpointRepo(listOf(park)), FakeCheckInRepo(listOf(stale)), FakeLocation(UserLocation(51.5073, -0.1657)))
+            .state.test {
+                var s = awaitItem()
+                while (s.checkpoints.isEmpty()) s = awaitItem()
+                assertEquals(false, s.checkpoints.single().checkedIn)
+                cancelAndIgnoreRemainingEvents()
+            }
     }
 
     @Test fun checkpointsAreSortedByDistanceWithDistancePopulated() = runTest {

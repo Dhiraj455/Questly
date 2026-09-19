@@ -7,6 +7,9 @@ data class CheckpointUi(
     val checkpoint: Checkpoint,
     val withinRange: Boolean,
     val distanceMeters: Double?,
+    // True when a check-in for this checkpoint is still within the cooldown window, so the user
+    // can't check in again yet.
+    val checkedIn: Boolean = false,
 )
 
 data class MapUiState(

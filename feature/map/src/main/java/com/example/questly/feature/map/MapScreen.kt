@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Explore
@@ -354,9 +355,42 @@ private fun ChallengeRow(item: CheckpointUi, onClick: () -> Unit, onCheckIn: () 
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Button(onClick = onCheckIn, enabled = item.withinRange) {
-                Text("Check in", fontWeight = FontWeight.SemiBold)
+            if (item.checkedIn) {
+                CheckedInBadge()
+            } else {
+                Button(onClick = onCheckIn, enabled = item.withinRange) {
+                    Text("Check in", fontWeight = FontWeight.SemiBold)
+                }
             }
+        }
+    }
+}
+
+/** Read-only "Checked in" status shown in place of the check-in button once a checkpoint is done. */
+@Composable
+private fun CheckedInBadge(modifier: Modifier = Modifier) {
+    Surface(
+        modifier,
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                "Checked in",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -399,11 +433,15 @@ private fun CheckpointCard(
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onCheckIn, enabled = item.withinRange, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    if (item.withinRange) "Check in" else "Move closer to check in",
-                    fontWeight = FontWeight.SemiBold,
-                )
+            if (item.checkedIn) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CheckedInBadge() }
+            } else {
+                Button(onClick = onCheckIn, enabled = item.withinRange, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        if (item.withinRange) "Check in" else "Move closer to check in",
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
     }
