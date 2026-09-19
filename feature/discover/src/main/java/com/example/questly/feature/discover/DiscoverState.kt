@@ -18,6 +18,7 @@ data class EventSection(
 
 data class DiscoverUiState(
     val radiusMeters: Double = DEFAULT_RADIUS_M,
+    val query: String = "",
     val recommended: EventSection = EventSection(),
     val withinRadius: EventSection = EventSection(),
     val nearby: EventSection = EventSection(),
@@ -25,13 +26,18 @@ data class DiscoverUiState(
 
 /**
  * Buckets [all] events into the three Discover sections for [radiusMeters], each sliced to the
- * visible count in [visibleCounts] (defaulting to [PAGE_SIZE]).
+ * visible count in [visibleCounts] (defaulting to [PAGE_SIZE]). When [query] is non-blank, only
+ * events whose title contains it (case-insensitive) are kept.
  */
 fun buildDiscoverState(
     all: List<Event>,
     radiusMeters: Double,
     visibleCounts: Map<DiscoverSection, Int>,
+    query: String = "",
 ): DiscoverUiState {
+    val matched = query.trim().takeIf { it.isNotEmpty() }
+        ?.let { q -> all.filter { it.title.contains(q, ignoreCase = true) } }
+        ?: all
     fun section(events: List<Event>, id: DiscoverSection): EventSection {
         val sorted = events.sortedBy { it.distanceMeters }
         val visible = visibleCounts[id] ?: PAGE_SIZE
@@ -39,10 +45,11 @@ fun buildDiscoverState(
     }
     return DiscoverUiState(
         radiusMeters = radiusMeters,
-        recommended = section(all.filter { it.recommended }, DiscoverSection.RECOMMENDED),
-        withinRadius = section(all.filter { it.distanceMeters <= radiusMeters }, DiscoverSection.WITHIN_RADIUS),
+        query = query,
+        recommended = section(matched.filter { it.recommended }, DiscoverSection.RECOMMENDED),
+        withinRadius = section(matched.filter { it.distanceMeters <= radiusMeters }, DiscoverSection.WITHIN_RADIUS),
         nearby = section(
-            all.filter { it.distanceMeters > radiusMeters && it.distanceMeters <= NEARBY_MAX_M },
+            matched.filter { it.distanceMeters > radiusMeters && it.distanceMeters <= NEARBY_MAX_M },
             DiscoverSection.NEARBY,
         ),
     )

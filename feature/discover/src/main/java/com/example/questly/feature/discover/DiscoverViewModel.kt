@@ -20,10 +20,11 @@ class DiscoverViewModel @Inject constructor(
 
     private val radiusMeters = MutableStateFlow(DEFAULT_RADIUS_M)
     private val visibleCounts = MutableStateFlow(INITIAL_VISIBLE)
+    private val query = MutableStateFlow("")
 
     val state: StateFlow<DiscoverUiState> =
-        combine(radiusMeters, visibleCounts) { radius, visible ->
-            buildDiscoverState(allEvents, radius, visible)
+        combine(radiusMeters, visibleCounts, query) { radius, visible, q ->
+            buildDiscoverState(allEvents, radius, visible, q)
         }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
@@ -36,6 +37,12 @@ class DiscoverViewModel @Inject constructor(
         visibleCounts.update {
             it + (DiscoverSection.WITHIN_RADIUS to PAGE_SIZE) + (DiscoverSection.NEARBY to PAGE_SIZE)
         }
+    }
+
+    /** Called as the user types in the search box. Re-filters and resets paging to the first page. */
+    fun setQuery(text: String) {
+        query.value = text
+        visibleCounts.value = INITIAL_VISIBLE
     }
 
     fun loadMore(section: DiscoverSection) {

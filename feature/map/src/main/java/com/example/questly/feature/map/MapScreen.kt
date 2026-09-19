@@ -42,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetScaffoldState
@@ -56,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -279,6 +281,7 @@ private fun TypeFilterButton(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RadiusSlider(radiusMeters: Double, onRadiusChange: (Double) -> Unit) {
     // Drag updates only the local position; we query on release so a single drag
@@ -296,6 +299,25 @@ private fun RadiusSlider(radiusMeters: Double, onRadiusChange: (Double) -> Unit)
             onValueChangeFinished = { onRadiusChange(meters.toDouble()) },
             valueRange = MIN_RADIUS_M.toFloat()..MAX_RADIUS_M.toFloat(),
             modifier = Modifier.weight(1f),
+            thumb = {
+                // Small round thumb — Material3's default wide "pill" thumb looks oversized on
+                // this compact control (see the reported UI). A 16dp dot reads as a normal slider.
+                Box(
+                    Modifier
+                        .size(16.dp)
+                        .shadow(1.dp, CircleShape)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                )
+            },
+            track = { sliderState ->
+                // Continuous track with no thumb gap or end stop-indicator dot, for a clean line.
+                SliderDefaults.Track(
+                    sliderState = sliderState,
+                    modifier = Modifier.height(4.dp),
+                    thumbTrackGapSize = 0.dp,
+                    drawStopIndicator = null,
+                )
+            },
         )
     }
 }

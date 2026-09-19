@@ -11,7 +11,11 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
         pluginManager.apply("com.android.library")
         extensions.configure<LibraryExtension> {
             compileSdk = 37
-            defaultConfig { minSdk = 24 }
+            defaultConfig {
+                minSdk = 24
+                // Lets any library module run instrumented (androidTest) tests on a device/emulator.
+                testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+            }
             compileOptions {
                 sourceCompatibility = JavaVersion.VERSION_11
                 targetCompatibility = JavaVersion.VERSION_11

@@ -34,8 +34,6 @@ private enum class Tab(val label: String, val selectedIcon: ImageVector, val ico
 
 @Composable
 fun QuestlyNavHost() {
-    // ponytail: two-tab Int state, not a NavHost/route graph. Upgrade to
-    // navigation-compose when a 3rd destination or deep links appear.
     var current by remember { mutableIntStateOf(0) }
     Scaffold(
         bottomBar = {

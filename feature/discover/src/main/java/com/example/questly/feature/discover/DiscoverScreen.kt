@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -16,27 +17,38 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -46,9 +58,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiscoverScreen(viewModel: DiscoverViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var showFilter by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -66,7 +80,11 @@ fun DiscoverScreen(viewModel: DiscoverViewModel = hiltViewModel()) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
-            RadiusSlider(radiusMeters = state.radiusMeters, onRadiusChange = viewModel::setRadius)
+            SearchAndFilterBar(
+                query = state.query,
+                onQueryChange = viewModel::setQuery,
+                onFilterClick = { showFilter = true },
+            )
         }
 
         EventSectionRow(
@@ -88,8 +106,66 @@ fun DiscoverScreen(viewModel: DiscoverViewModel = hiltViewModel()) {
             onLoadMore = { viewModel.loadMore(DiscoverSection.NEARBY) },
         )
     }
+
+    if (showFilter) {
+        ModalBottomSheet(
+            onDismissRequest = { showFilter = false },
+            sheetState = rememberModalBottomSheetState(),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp),
+            ) {
+                Text("Filter", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Distance",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                RadiusSlider(radiusMeters = state.radiusMeters, onRadiusChange = viewModel::setRadius)
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { showFilter = false }) { Text("Done") }
+                }
+            }
+        }
+    }
 }
 
+@Composable
+private fun SearchAndFilterBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onFilterClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+            shape = RoundedCornerShape(28.dp),
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            placeholder = { Text("Search events") },
+        )
+        FilledTonalIconButton(onClick = onFilterClick, modifier = Modifier.size(56.dp)) {
+            Icon(Icons.Filled.Tune, contentDescription = "Filter")
+        }
+    }
+}
+
+// ponytail: this styled radius slider is duplicated from :feature:map. When a third caller appears,
+// lift it (and the radius constants) into a shared :core:designsystem module.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RadiusSlider(radiusMeters: Double, onRadiusChange: (Double) -> Unit) {
     var meters by remember(radiusMeters) { mutableFloatStateOf(radiusMeters.toFloat()) }
@@ -105,6 +181,22 @@ private fun RadiusSlider(radiusMeters: Double, onRadiusChange: (Double) -> Unit)
             onValueChangeFinished = { onRadiusChange(meters.toDouble()) },
             valueRange = MIN_RADIUS_M.toFloat()..MAX_RADIUS_M.toFloat(),
             modifier = Modifier.weight(1f),
+            thumb = {
+                Box(
+                    Modifier
+                        .size(16.dp)
+                        .shadow(1.dp, CircleShape)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                )
+            },
+            track = { sliderState ->
+                SliderDefaults.Track(
+                    sliderState = sliderState,
+                    modifier = Modifier.height(4.dp),
+                    thumbTrackGapSize = 0.dp,
+                    drawStopIndicator = null,
+                )
+            },
         )
     }
 }

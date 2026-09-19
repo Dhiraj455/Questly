@@ -12,5 +12,6 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.kotlinx.coroutines.test)
 }
