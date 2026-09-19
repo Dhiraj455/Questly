@@ -1,0 +1,451 @@
+openapi: 3.1.0
+info:
+  title: Questly API
+  version: 0.1.0
+  description: >
+    Backend contract for Questly v3 (accounts & backend). This is the seam between the
+    Android app and the Ktor + PostgreSQL service. The app keeps its existing
+    CheckpointRepository / CheckInRepository interfaces and gains remote implementations
+    that call these endpoints — the UI does not change.
+
+    Auth: self-hosted email+password (with REAL email verification) plus Google OAuth.
+    A newly registered account is INACTIVE until the user verifies a token emailed to
+    the address, so throwaway/dummy emails cannot be used.
+
+servers:
+  - url: https://api.questly.example.com/v1
+    description: Production (placeholder — host TBD)
+  - url: http://10.0.2.2:8080/v1
+    description: Local Ktor server as seen from the Android emulator
+
+tags:
+  - name: auth
+    description: Registration, email verification, sign-in, sessions, account management
+  - name: checkpoints
+    description: Quest-worthy POIs, proxied + cached from Overpass server-side
+  - name: checkins
+    description: Server-validated check-ins, history, and points
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ------------------------------------------------------------------ auth
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register with email + password
+      description: >
+        Creates an INACTIVE account and emails a verification token to the address.
+        The account cannot sign in until POST /auth/verify-email succeeds. Returns 202
+        even when the email already exists, to avoid leaking which emails are registered.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '202':
+          description: Verification email sent (if the address was eligible)
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/verify-email:
+    post:
+      tags: [auth]
+      summary: Verify email ownership with the emailed token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, description: One-time token from the verification email }
+      responses:
+        '200':
+          description: Email verified; account is now active
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '410':
+          description: Token expired or already used
+
+  /auth/resend-verification:
+    post:
+      tags: [auth]
+      summary: Resend the verification email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '202': { description: Verification email re-sent if the account exists and is unverified }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Sign in with email + password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Email not yet verified
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/google:
+    post:
+      tags: [auth]
+      summary: Sign in / sign up with a Google ID token
+      description: The server verifies the Google ID token; the Google email is trusted as verified.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken]
+              properties:
+                idToken: { type: string, description: Google ID token from Google Sign-In on device }
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Exchange a refresh token for a new token pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New token pair (refresh token is rotated)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke a refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '204': { description: Refresh token revoked }
+
+  /auth/password/forgot:
+    post:
+      tags: [auth]
+      summary: Request a password-reset email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '202': { description: Reset email sent if the account exists }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/password/reset:
+    post:
+      tags: [auth]
+      summary: Set a new password using the emailed reset token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string }
+                newPassword: { type: string, format: password, minLength: 8 }
+      responses:
+        '200': { description: Password changed; existing sessions revoked }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '410': { description: Token expired or already used }
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Get the current user
+      responses:
+        '200':
+          description: The authenticated user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [auth]
+      summary: Delete the current account and all its data
+      description: Play Store requirement once accounts exist. Irreversible.
+      responses:
+        '204': { description: Account and associated data deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ----------------------------------------------------------- checkpoints
+  /checkpoints:
+    get:
+      tags: [checkpoints]
+      summary: Nearby quest checkpoints (Overpass proxied + cached server-side)
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: number, format: double } }
+        - { name: lng, in: query, required: true, schema: { type: number, format: double } }
+        - name: radiusMeters
+          in: query
+          required: true
+          schema: { type: number, format: double, minimum: 1000, maximum: 20000 }
+        - name: types
+          in: query
+          required: false
+          description: Optional CSV of categories to include (PARK, BEACH, VIEWPOINT, LANDMARK)
+          schema: { type: string }
+      responses:
+        '200':
+          description: Checkpoints within the radius, nearest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Checkpoint' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '502':
+          description: Upstream (Overpass) unavailable and no cache to serve
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # -------------------------------------------------------------- checkins
+  /checkins:
+    get:
+      tags: [checkins]
+      summary: The user's check-in history (most recent first)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string }, description: Opaque cursor from a prior page }
+      responses:
+        '200':
+          description: A page of check-ins
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckInPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [checkins]
+      summary: Record a server-validated check-in
+      description: >
+        The server re-checks distance and time (anti-cheat) rather than trusting the client.
+        Send an Idempotency-Key so a retry of the same attempt does not double-count.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CheckInRequest' }
+      responses:
+        '201':
+          description: Check-in accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckIn' }
+        '409':
+          description: Rejected by a check-in rule (too far, on cooldown, or unknown checkpoint)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckInRejection' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /points:
+    get:
+      tags: [checkins]
+      summary: The user's total points (server-owned ledger sum)
+      responses:
+        '200':
+          description: Total points
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Points' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived access token from /auth/login, /auth/refresh, etc.
+
+  responses:
+    BadRequest:
+      description: Malformed or invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or invalid access token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+        displayName: { type: string, minLength: 1, maxLength: 40 }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken, expiresInSeconds]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresInSeconds: { type: integer, description: Lifetime of the access token }
+
+    User:
+      type: object
+      required: [id, email, displayName, emailVerified, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        emailVerified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    Checkpoint:
+      type: object
+      required: [id, title, lat, lng, radiusMeters, points, category]
+      properties:
+        id: { type: string, description: Stable id, e.g. "node/123456" }
+        title: { type: string }
+        description: { type: string }
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+        radiusMeters: { type: number, format: double }
+        points: { type: integer }
+        category:
+          type: string
+          enum: [PARK, BEACH, VIEWPOINT, LANDMARK, EVENT, CHALLENGE]
+
+    CheckInRequest:
+      type: object
+      required: [checkpointId, lat, lng, clientTimestamp]
+      properties:
+        checkpointId: { type: string }
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+        clientTimestamp: { type: string, format: date-time }
+
+    CheckIn:
+      type: object
+      required: [id, checkpointId, title, points, timestamp]
+      properties:
+        id: { type: string, format: uuid }
+        checkpointId: { type: string }
+        title: { type: string, description: Snapshotted at check-in time }
+        points: { type: integer, description: Snapshotted at check-in time }
+        timestamp: { type: string, format: date-time, description: Server-assigned time }
+
+    CheckInPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CheckIn' }
+        nextCursor:
+          type: string
+          description: Present when more results exist
+
+    CheckInRejection:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [TOO_FAR, ON_COOLDOWN, UNKNOWN_CHECKPOINT, IMPLAUSIBLE]
+        message: { type: string }
+        retryAfterSeconds: { type: integer, description: For ON_COOLDOWN }
+
+    Points:
+      type: object
+      required: [total]
+      properties:
+        total: { type: integer }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, description: Stable, machine-readable error code }
+        message: { type: string, description: Human-readable detail (no PII) }
