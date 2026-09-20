@@ -17,3 +17,5 @@ build/
 local.properties
 # Kotlin compiler/daemon working directory
 .kotlin/
+# Local backend secrets (SMTP/OAuth/JWT); commit only .env.example
+.env

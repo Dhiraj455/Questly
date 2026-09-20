@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: questly-postgres
+    environment:
+      POSTGRES_DB: questly
+      POSTGRES_USER: questly
+      POSTGRES_PASSWORD: questly
+    ports:
+      - "5432:5432"
+    volumes:
+      - questly_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U questly"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  questly_pgdata:
