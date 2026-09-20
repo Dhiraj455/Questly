@@ -11,6 +11,8 @@ import com.example.questly.core.location.LocationProvider
 import com.example.questly.core.location.UserLocation
 import com.example.questly.core.model.distanceMeters
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,6 +26,10 @@ import javax.inject.Inject
 
 // Re-query when the user has moved at least this fraction of the current radius.
 private const val REQUERY_MOVE_FRACTION = 0.3
+
+// Wait for the slider to settle before hitting the network, so dragging through several values
+// (or a burst of releases) collapses into a single query for the final radius.
+private const val RADIUS_DEBOUNCE_MILLIS = 400L
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
@@ -39,6 +45,7 @@ class MapViewModel @Inject constructor(
 
     private val refreshLock = Mutex()
     private var lastQuery: Query? = null
+    private var radiusRefreshJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -77,10 +84,17 @@ class MapViewModel @Inject constructor(
             MapUiState(loc, ui, radiusMeters = radius, isLoading = loading, error = err)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MapUiState())
 
-    /** Called when the user releases the radius slider. */
+    /**
+     * Called when the user releases the radius slider. Updates the shown radius immediately but
+     * debounces the network query, cancelling any pending one so only the last value is fetched.
+     */
     fun setRadius(meters: Double) {
         radiusMeters.value = meters
-        viewModelScope.launch { location.value?.let { maybeRefresh(it, meters, force = true) } }
+        radiusRefreshJob?.cancel()
+        radiusRefreshJob = viewModelScope.launch {
+            delay(RADIUS_DEBOUNCE_MILLIS)
+            location.value?.let { maybeRefresh(it, meters, force = true) }
+        }
     }
 
     /** Manual pull-to-refresh / refresh button. */

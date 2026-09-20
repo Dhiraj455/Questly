@@ -147,6 +147,19 @@ class MapViewModelTest {
         assertEquals(MAX_RADIUS_M, repo.refreshCalls.last().third, 0.0)
     }
 
+    @Test fun rapidRadiusChangesCollapseToOneQueryForTheLastValue() = runTest {
+        val repo = FakeCheckpointRepo()
+        val vm = MapViewModel(repo, FakeCheckInRepo(), FakeLocation(UserLocation(51.5, -0.16)))
+        advanceUntilIdle() // initial location-fix query
+        val before = repo.refreshCalls.size
+        vm.setRadius(8_000.0)
+        vm.setRadius(12_000.0)
+        vm.setRadius(MAX_RADIUS_M) // three quick changes before the debounce elapses
+        advanceUntilIdle()
+        assertEquals(before + 1, repo.refreshCalls.size) // only the last one fires
+        assertEquals(MAX_RADIUS_M, repo.refreshCalls.last().third, 0.0)
+    }
+
     @Test fun manualRefreshRequeriesWhileStationary() = runTest {
         val repo = FakeCheckpointRepo()
         val vm = MapViewModel(repo, FakeCheckInRepo(), FakeLocation(UserLocation(51.5, -0.16)))
