@@ -6,6 +6,9 @@ import com.example.questly.backend.auth.EmailSender
 import com.example.questly.backend.auth.JwtConfig
 import com.example.questly.backend.auth.LoggingEmailSender
 import com.example.questly.backend.auth.authRoutes
+import com.example.questly.backend.checkpoints.CheckpointsService
+import com.example.questly.backend.checkpoints.OverpassClient
+import com.example.questly.backend.checkpoints.checkpointRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
 import io.ktor.server.engine.embeddedServer
@@ -27,9 +30,15 @@ fun Application.module() {
     val jwt = JwtConfig.fromEnv()
     configureAuthentication(jwt)
     val authService = AuthService(jwt, emailSender())
+    val checkpointsService = CheckpointsService(OverpassClient())
 
     configureRouting() // GET /health
-    routing { route("/v1") { authRoutes(authService) } }
+    routing {
+        route("/v1") {
+            authRoutes(authService)
+            checkpointRoutes(checkpointsService)
+        }
+    }
 }
 
 /** Uses Brevo when BREVO_API_KEY + BREVO_SENDER_EMAIL are set; otherwise logs the link (dev). */
