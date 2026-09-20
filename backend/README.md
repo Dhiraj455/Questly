@@ -25,6 +25,9 @@ This is a standalone Gradle build; run it with the repo's root Gradle wrapper vi
 
    → `{"status":"ok","service":"questly-backend","version":"0.1.0"}`
 
+   > Postgres is published on host port **5433** (not 5432) to avoid clashing with a local
+   > PostgreSQL install. The backend defaults to `localhost:5433`; override with `DATABASE_URL`.
+
 ## Test
 
 ```bash

@@ -22,6 +22,12 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor")
     implementation("io.ktor:ktor-server-status-pages:$ktor")
     implementation("io.ktor:ktor-server-call-logging:$ktor")
+    implementation("io.ktor:ktor-server-auth:$ktor")
+    implementation("io.ktor:ktor-server-auth-jwt:$ktor")
+
+    // Auth: JWT issuing + password hashing
+    implementation("com.auth0:java-jwt:4.4.0")
+    implementation("at.favre.lib:bcrypt:0.10.2")
 
     // Persistence: Exposed + Hikari + PostgreSQL + Flyway migrations
     implementation("org.jetbrains.exposed:exposed-core:$exposed")

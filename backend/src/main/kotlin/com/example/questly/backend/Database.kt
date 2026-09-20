@@ -13,7 +13,8 @@ import org.jetbrains.exposed.sql.Database
  * defaults match docker-compose.yml for local development.
  */
 fun Application.configureDatabase() {
-    val jdbcUrl = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/questly"
+    // Default matches docker-compose (host 5433, to dodge a local Postgres on 5432).
+    val jdbcUrl = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5433/questly"
     val user = System.getenv("DATABASE_USER") ?: "questly"
     val pass = System.getenv("DATABASE_PASSWORD") ?: "questly"
 
