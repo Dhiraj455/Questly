@@ -76,8 +76,20 @@ class AuthService(
 
     /** Consumes a verification token, activates the account, and returns a fresh token pair. */
     suspend fun verifyEmail(req: VerifyEmailRequest): TokenPair = newSuspendedTransaction(Dispatchers.IO) {
+        val userId = consumeVerifyToken(req.token)
+        val userEmail = Users.selectAll().where { Users.id eq userId }.first()[Users.email]
+        issueTokens(userId, userEmail)
+    }
+
+    /** Browser (email-link) path: marks the account verified without issuing tokens. */
+    suspend fun confirmEmail(token: String) {
+        newSuspendedTransaction(Dispatchers.IO) { consumeVerifyToken(token) }
+    }
+
+    /** Validates and single-use-consumes a VERIFY token, marking the account verified. */
+    private fun consumeVerifyToken(token: String): UUID {
         val row = EmailTokens.selectAll()
-            .where { (EmailTokens.token eq req.token) and (EmailTokens.purpose eq PURPOSE_VERIFY) }
+            .where { (EmailTokens.token eq token) and (EmailTokens.purpose eq PURPOSE_VERIFY) }
             .limit(1)
             .firstOrNull()
             ?: throw ApiException(HttpStatusCode.Gone, "invalid_token", "Verification link is invalid")
@@ -86,11 +98,9 @@ class AuthService(
             throw ApiException(HttpStatusCode.Gone, "expired_token", "Verification link has expired")
         }
         val userId = row[EmailTokens.userId]
-        EmailTokens.update({ EmailTokens.token eq req.token }) { it[usedAt] = now() }
+        EmailTokens.update({ EmailTokens.token eq token }) { it[usedAt] = now() }
         Users.update({ Users.id eq userId }) { it[emailVerified] = true }
-
-        val userEmail = Users.selectAll().where { Users.id eq userId }.first()[Users.email]
-        issueTokens(userId, userEmail)
+        return userId
     }
 
     suspend fun login(req: LoginRequest): TokenPair = newSuspendedTransaction(Dispatchers.IO) {

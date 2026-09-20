@@ -1,17 +1,20 @@
 package com.example.questly.backend
 
 import com.example.questly.backend.auth.AuthService
+import com.example.questly.backend.auth.BrevoEmailSender
+import com.example.questly.backend.auth.EmailSender
 import com.example.questly.backend.auth.JwtConfig
 import com.example.questly.backend.auth.LoggingEmailSender
 import com.example.questly.backend.auth.authRoutes
 import io.ktor.server.application.Application
+import io.ktor.server.application.log
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 
 fun main() {
-    val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+    val port = Env["PORT"]?.toIntOrNull() ?: 8080
     embeddedServer(Netty, port = port, host = "0.0.0.0") { module() }.start(wait = true)
 }
 
@@ -23,10 +26,25 @@ fun Application.module() {
 
     val jwt = JwtConfig.fromEnv()
     configureAuthentication(jwt)
-    // ponytail: manual construction (no DI). A Brevo sender replaces LoggingEmailSender once
-    // BREVO_API_KEY is set; swap the one line below.
-    val authService = AuthService(jwt, LoggingEmailSender())
+    val authService = AuthService(jwt, emailSender())
 
     configureRouting() // GET /health
     routing { route("/v1") { authRoutes(authService) } }
+}
+
+/** Uses Brevo when BREVO_API_KEY + BREVO_SENDER_EMAIL are set; otherwise logs the link (dev). */
+private fun Application.emailSender(): EmailSender {
+    val apiKey = Env["BREVO_API_KEY"]
+    val sender = Env["BREVO_SENDER_EMAIL"]
+    return if (!apiKey.isNullOrBlank() && !sender.isNullOrBlank()) {
+        log.info("Email: using Brevo transactional sender")
+        BrevoEmailSender(
+            apiKey = apiKey,
+            senderEmail = sender,
+            senderName = Env["BREVO_SENDER_NAME"] ?: "Questly",
+        )
+    } else {
+        log.info("Email: BREVO_* not set, using dev LoggingEmailSender")
+        LoggingEmailSender()
+    }
 }

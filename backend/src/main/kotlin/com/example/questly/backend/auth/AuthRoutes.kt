@@ -1,11 +1,13 @@
 package com.example.questly.backend.auth
 
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -21,6 +23,17 @@ fun Route.authRoutes(service: AuthService) {
         }
         post("/verify-email") {
             call.respond(HttpStatusCode.OK, service.verifyEmail(call.receive()))
+        }
+        // Human-clickable link from the verification email (GET), renders a confirmation page.
+        get("/verify-email") {
+            val token = call.request.queryParameters["token"]
+                ?: throw ApiException(HttpStatusCode.BadRequest, "missing_token", "Missing token")
+            service.confirmEmail(token)
+            call.respondText(
+                "<html><body style=\"font-family:sans-serif;text-align:center;padding:48px\">" +
+                    "<h2>Email verified ✅</h2><p>You can return to the Questly app and sign in.</p></body></html>",
+                ContentType.Text.Html,
+            )
         }
         post("/login") {
             call.respond(HttpStatusCode.OK, service.login(call.receive()))

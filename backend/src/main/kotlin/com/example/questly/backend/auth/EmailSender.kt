@@ -12,7 +12,7 @@ interface EmailSender {
  * without a real provider. Swap for a BrevoEmailSender once BREVO_API_KEY is set.
  */
 class LoggingEmailSender(
-    private val appBaseUrl: String = System.getenv("APP_BASE_URL") ?: "http://localhost:8080",
+    private val appBaseUrl: String = com.example.questly.backend.Env["APP_BASE_URL"] ?: "http://localhost:8081",
 ) : EmailSender {
     private val log = LoggerFactory.getLogger(LoggingEmailSender::class.java)
 

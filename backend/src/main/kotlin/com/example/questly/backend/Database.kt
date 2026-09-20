@@ -14,9 +14,9 @@ import org.jetbrains.exposed.sql.Database
  */
 fun Application.configureDatabase() {
     // Default matches docker-compose (host 5433, to dodge a local Postgres on 5432).
-    val jdbcUrl = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5433/questly"
-    val user = System.getenv("DATABASE_USER") ?: "questly"
-    val pass = System.getenv("DATABASE_PASSWORD") ?: "questly"
+    val jdbcUrl = Env["DATABASE_URL"] ?: "jdbc:postgresql://localhost:5433/questly"
+    val user = Env["DATABASE_USER"] ?: "questly"
+    val pass = Env["DATABASE_PASSWORD"] ?: "questly"
 
     val dataSource = HikariDataSource(
         HikariConfig().apply {

@@ -29,6 +29,11 @@ dependencies {
     implementation("com.auth0:java-jwt:4.4.0")
     implementation("at.favre.lib:bcrypt:0.10.2")
 
+    // HTTP client for the Brevo transactional-email API
+    implementation("io.ktor:ktor-client-core:$ktor")
+    implementation("io.ktor:ktor-client-cio:$ktor")
+    implementation("io.ktor:ktor-client-content-negotiation:$ktor")
+
     // Persistence: Exposed + Hikari + PostgreSQL + Flyway migrations
     implementation("org.jetbrains.exposed:exposed-core:$exposed")
     implementation("org.jetbrains.exposed:exposed-jdbc:$exposed")
