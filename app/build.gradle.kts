@@ -56,6 +56,7 @@ dependencies {
     implementation(project(":feature:map"))
     implementation(project(":feature:checkin"))
     implementation(project(":feature:discover"))
+    implementation(project(":core:network"))
     // Force the 16 KB-aligned native lib (libandroidx.graphics.path.so).
     implementation(libs.androidx.graphics.path)
     testImplementation(libs.junit)

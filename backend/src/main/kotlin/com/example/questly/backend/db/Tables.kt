@@ -32,3 +32,17 @@ object RefreshTokens : Table("refresh_tokens") {
     val revokedAt = timestampWithTimeZone("revoked_at").nullable()
     override val primaryKey = PrimaryKey(token)
 }
+
+object CheckIns : Table("checkins") {
+    val id = uuid("id")
+    val userId = uuid("user_id")
+    val checkpointId = text("checkpoint_id")
+    val title = text("title")
+    val points = integer("points")
+    val clientLat = double("client_lat")
+    val clientLng = double("client_lng")
+    val clientTimestamp = timestampWithTimeZone("client_timestamp")
+    val createdAt = timestampWithTimeZone("created_at")
+    val idempotencyKey = uuid("idempotency_key")
+    override val primaryKey = PrimaryKey(id)
+}

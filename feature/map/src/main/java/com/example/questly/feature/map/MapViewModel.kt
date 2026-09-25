@@ -41,6 +41,7 @@ class MapViewModel @Inject constructor(
     private val location = MutableStateFlow<UserLocation?>(null)
     private val radiusMeters = MutableStateFlow(DEFAULT_RADIUS_M)
     private val isLoading = MutableStateFlow(false)
+    private val checkingInId = MutableStateFlow<String?>(null)
     private val error = MutableStateFlow<String?>(null)
 
     private val refreshLock = Mutex()
@@ -80,8 +81,10 @@ class MapViewModel @Inject constructor(
         }
 
     val state: StateFlow<MapUiState> =
-        combine(checkpointsUi, location, radiusMeters, isLoading, error) { ui, loc, radius, loading, err ->
-            MapUiState(loc, ui, radiusMeters = radius, isLoading = loading, error = err)
+        combine(checkpointsUi, location, radiusMeters, isLoading, checkingInId) { ui, loc, radius, loading, checkingId ->
+            MapUiState(loc, ui, radiusMeters = radius, isLoading = loading, checkingInId = checkingId)
+        }.combine(error) { current, err ->
+            current.copy(error = err)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MapUiState())
 
     /**
@@ -104,8 +107,14 @@ class MapViewModel @Inject constructor(
 
     fun checkIn(checkpointId: String, onResult: (CheckInResult) -> Unit) {
         val loc = state.value.userLocation ?: return onResult(CheckInResult.TooFar)
+        if (checkingInId.value != null) return
         viewModelScope.launch {
-            onResult(checkInRepository.recordCheckIn(checkpointId, loc.lat, loc.lng, System.currentTimeMillis()))
+            checkingInId.value = checkpointId
+            try {
+                onResult(checkInRepository.recordCheckIn(checkpointId, loc.lat, loc.lng, System.currentTimeMillis()))
+            } finally {
+                checkingInId.value = null
+            }
         }
     }
 

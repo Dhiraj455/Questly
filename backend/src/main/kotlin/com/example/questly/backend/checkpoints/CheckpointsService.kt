@@ -15,13 +15,29 @@ private const val CACHE_TTL_MILLIS = 10 * 60 * 1000L // 10 minutes
  */
 class CheckpointsService(private val overpass: OverpassClient) {
     private data class Entry(val fetchedAt: Long, val checkpoints: List<CheckpointDto>)
+    private data class Single(val fetchedAt: Long, val checkpoint: CheckpointDto)
 
     private val cache = ConcurrentHashMap<String, Entry>()
+    // Per-checkpoint cache so check-in validation reuses what a recent /checkpoints call already
+    // fetched, instead of a fresh (slow, rate-limited) Overpass round-trip per check-in.
+    private val byId = ConcurrentHashMap<String, Single>()
 
     /** Cache key rounds the point so nearby requests share a result. */
     private fun keyFor(lat: Double, lng: Double, radiusMeters: Double): String {
         fun round4(v: Double) = (v * 10_000).roundToInt()
         return "${round4(lat)}:${round4(lng)}:${radiusMeters.toInt()}"
+    }
+
+    /**
+     * Resolves a single checkpoint for check-in validation: from the per-id cache when a recent
+     * /checkpoints call saw it (the normal path), else one targeted Overpass lookup. Returns null if
+     * the id doesn't exist; propagates IOException if Overpass is unreachable on a cache miss.
+     */
+    suspend fun resolve(id: String): CheckpointDto? {
+        byId[id]?.takeIf { System.currentTimeMillis() - it.fetchedAt < CACHE_TTL_MILLIS }?.let { return it.checkpoint }
+        val fetched = overpass.findById(id) ?: return null
+        byId[id] = Single(System.currentTimeMillis(), fetched)
+        return fetched
     }
 
     /**
@@ -47,6 +63,8 @@ class CheckpointsService(private val overpass: OverpassClient) {
                 .take(MAX_QUESTS)
                 .map { (cp, _) -> cp }
             cache[key] = Entry(System.currentTimeMillis(), fetched)
+            val stampedAt = System.currentTimeMillis()
+            fetched.forEach { byId[it.id] = Single(stampedAt, it) } // warm the per-id cache for check-ins
             fetched
         }
 

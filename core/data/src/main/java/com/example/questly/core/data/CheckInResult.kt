@@ -5,6 +5,7 @@ sealed interface CheckInResult {
     data object TooFar : CheckInResult
     data object OnCooldown : CheckInResult
     data object UnknownCheckpoint : CheckInResult
+    data object NetworkError : CheckInResult
 }
 
 const val CHECK_IN_COOLDOWN_MILLIS = 3_600_000L

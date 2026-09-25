@@ -30,8 +30,6 @@ class RemoteCheckpointRepository @Inject constructor(
         }
         val entities = pois
             .map { it to distanceMeters(lat, lng, it.lat, it.lng) }
-            // Overpass 'around' matches large features (routes, multipolygons) by geometry, but
-            // their center can be far away. Keep only quests whose center is truly in radius.
             .filter { (_, d) -> d <= radiusMeters }
             .sortedBy { (_, d) -> d }
             .take(MAX_QUESTS)

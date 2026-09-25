@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.questly.core.data.CheckInRepository
 import com.example.questly.core.data.CheckpointRepository
-import com.example.questly.core.data.LocalCheckInRepository
+import com.example.questly.core.data.RemoteCheckInRepository
 import com.example.questly.core.data.RemoteCheckpointRepository
 import com.example.questly.core.database.CheckInDao
 import com.example.questly.core.database.CheckpointDao
@@ -21,7 +21,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class DataBindingsModule {
     @Binds abstract fun checkpointRepo(impl: RemoteCheckpointRepository): CheckpointRepository
-    @Binds abstract fun checkInRepo(impl: LocalCheckInRepository): CheckInRepository
+    @Binds abstract fun checkInRepo(impl: RemoteCheckInRepository): CheckInRepository
 }
 
 @Module

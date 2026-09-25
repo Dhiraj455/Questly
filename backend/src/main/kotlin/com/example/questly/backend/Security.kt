@@ -3,6 +3,7 @@ package com.example.questly.backend
 import com.example.questly.backend.auth.ApiError
 import com.example.questly.backend.auth.ApiException
 import com.example.questly.backend.auth.JwtConfig
+import com.example.questly.backend.checkins.CheckInRejected
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
@@ -32,6 +33,9 @@ fun Application.configureAuthentication(jwt: JwtConfig) {
 
 fun Application.configureStatusPages() {
     install(StatusPages) {
+        exception<CheckInRejected> { call, e ->
+            call.respond(HttpStatusCode.Conflict, e.body)
+        }
         exception<ApiException> { call, e ->
             call.respond(e.status, ApiError(e.code, e.message))
         }

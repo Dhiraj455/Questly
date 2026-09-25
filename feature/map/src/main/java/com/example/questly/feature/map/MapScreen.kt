@@ -119,6 +119,7 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
                 radiusMeters = state.radiusMeters,
                 isLoading = state.isLoading,
                 error = state.error,
+                checkingInId = state.checkingInId,
                 availableCategories = availableCategories,
                 selectedCategories = selectedCategories,
                 onToggleCategory = { cat ->
@@ -172,6 +173,7 @@ fun MapScreen(viewModel: MapViewModel = hiltViewModel()) {
             if (selected != null) {
                 CheckpointCard(
                     item = selected,
+                    checkingIn = state.checkingInId == selected.checkpoint.id,
                     onCheckIn = { checkIn(selected) },
                     onDismiss = { selectedId = null },
                     modifier = Modifier
@@ -190,6 +192,7 @@ private fun NearbySheet(
     radiusMeters: Double,
     isLoading: Boolean,
     error: String?,
+    checkingInId: String?,
     availableCategories: List<String>,
     selectedCategories: Set<String>,
     onToggleCategory: (String) -> Unit,
@@ -247,7 +250,7 @@ private fun NearbySheet(
             contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp),
         ) {
             items(checkpoints, key = { it.checkpoint.id }) { item ->
-                ChallengeRow(item = item, onClick = { onSelect(item) }, onCheckIn = { onCheckIn(item) })
+                ChallengeRow(item = item, checkingIn = checkingInId == item.checkpoint.id, onClick = { onSelect(item) }, onCheckIn = { onCheckIn(item) })
             }
         }
     }
@@ -324,7 +327,7 @@ private fun RadiusSlider(radiusMeters: Double, onRadiusChange: (Double) -> Unit)
 }
 
 @Composable
-private fun ChallengeRow(item: CheckpointUi, onClick: () -> Unit, onCheckIn: () -> Unit) {
+private fun ChallengeRow(item: CheckpointUi, checkingIn: Boolean, onClick: () -> Unit, onCheckIn: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
@@ -358,8 +361,8 @@ private fun ChallengeRow(item: CheckpointUi, onClick: () -> Unit, onCheckIn: () 
             if (item.checkedIn) {
                 CheckedInBadge()
             } else {
-                Button(onClick = onCheckIn, enabled = item.withinRange) {
-                    Text("Check in", fontWeight = FontWeight.SemiBold)
+                Button(onClick = onCheckIn, enabled = item.withinRange && !checkingIn) {
+                    Text(if (checkingIn) "Checking in…" else "Check in", fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -398,6 +401,7 @@ private fun CheckedInBadge(modifier: Modifier = Modifier) {
 @Composable
 private fun CheckpointCard(
     item: CheckpointUi,
+    checkingIn: Boolean,
     onCheckIn: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -436,9 +440,9 @@ private fun CheckpointCard(
             if (item.checkedIn) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CheckedInBadge() }
             } else {
-                Button(onClick = onCheckIn, enabled = item.withinRange, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onCheckIn, enabled = item.withinRange && !checkingIn, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        if (item.withinRange) "Check in" else "Move closer to check in",
+                        if (checkingIn) "Checking in…" else if (item.withinRange) "Check in" else "Move closer to check in",
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
@@ -508,4 +512,5 @@ private fun CheckInResult.message() = when (this) {
     CheckInResult.TooFar -> "You're too far away."
     CheckInResult.OnCooldown -> "Already checked in recently."
     CheckInResult.UnknownCheckpoint -> "Unknown checkpoint."
+    CheckInResult.NetworkError -> "Couldn't complete check-in. Check the backend connection and try again."
 }

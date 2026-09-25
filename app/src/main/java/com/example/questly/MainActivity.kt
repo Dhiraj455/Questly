@@ -14,8 +14,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             QuestlyTheme {
-                LocationPermissionGate {
-                    QuestlyNavHost()
+                AuthGate {
+                    LocationPermissionGate {
+                        QuestlyNavHost()
+                    }
                 }
             }
         }

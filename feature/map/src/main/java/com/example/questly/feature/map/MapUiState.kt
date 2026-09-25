@@ -17,6 +17,7 @@ data class MapUiState(
     val checkpoints: List<CheckpointUi> = emptyList(),
     val radiusMeters: Double = DEFAULT_RADIUS_M,
     val isLoading: Boolean = false,
+    val checkingInId: String? = null,
     val error: String? = null,
 )
 

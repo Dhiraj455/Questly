@@ -56,7 +56,18 @@ class OverpassClient(
 
     /** Throws IOException on network/HTTP failure so the caller can serve cache or a 502. */
     suspend fun query(lat: Double, lng: Double, radiusMeters: Double): List<CheckpointDto> {
-        val body = "data=" + buildQuery(lat, lng, radiusMeters)
+        return execute(buildQuery(lat, lng, radiusMeters))
+    }
+
+    /** Fetches one stable Overpass element, allowing check-in validation without trusting the app. */
+    suspend fun findById(checkpointId: String): CheckpointDto? {
+        val match = Regex("^(node|way|relation)/(\\d+)$").matchEntire(checkpointId) ?: return null
+        val query = "[out:json][timeout:25];${match.groupValues[1]}(${match.groupValues[2]});out center 1;"
+        return execute(query).firstOrNull()
+    }
+
+    private suspend fun execute(query: String): List<CheckpointDto> {
+        val body = "data=" + query
         val response = client.post(endpoint) {
             header("User-Agent", "Questly/1.0 (backend)")
             contentType(ContentType.Application.FormUrlEncoded)

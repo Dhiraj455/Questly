@@ -9,6 +9,8 @@ import com.example.questly.backend.auth.authRoutes
 import com.example.questly.backend.checkpoints.CheckpointsService
 import com.example.questly.backend.checkpoints.OverpassClient
 import com.example.questly.backend.checkpoints.checkpointRoutes
+import com.example.questly.backend.checkins.CheckInService
+import com.example.questly.backend.checkins.checkInRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
 import io.ktor.server.engine.embeddedServer
@@ -30,13 +32,16 @@ fun Application.module() {
     val jwt = JwtConfig.fromEnv()
     configureAuthentication(jwt)
     val authService = AuthService(jwt, emailSender())
+    // One CheckpointsService so check-in validation reuses the same cache the map query warms.
     val checkpointsService = CheckpointsService(OverpassClient())
+    val checkInService = CheckInService(checkpointsService)
 
     configureRouting() // GET /health
     routing {
         route("/v1") {
             authRoutes(authService)
             checkpointRoutes(checkpointsService)
+            checkInRoutes(checkInService)
         }
     }
 }
