@@ -26,6 +26,7 @@ private const val PURPOSE_VERIFY = "VERIFY"
 class AuthService(
     private val jwt: JwtConfig,
     private val email: EmailSender,
+    private val google: GoogleVerifier,
 ) {
     private val random = SecureRandom()
 
@@ -117,6 +118,34 @@ class AuthService(
             throw ApiException(HttpStatusCode.Forbidden, "email_unverified", "Please verify your email first")
         }
         issueTokens(user[Users.id], user[Users.email])
+    }
+
+    /** Verifies a Google ID token, then creates or links the account and issues our own tokens. */
+    suspend fun googleSignIn(idToken: String): TokenPair {
+        val identity = google.verify(idToken)
+        val email = normalizeEmail(identity.email)
+        return newSuspendedTransaction(Dispatchers.IO) {
+            val existing = Users.selectAll().where { Users.email eq email }.limit(1).firstOrNull()
+            val userId = if (existing != null) {
+                // A Google email is verified; make sure an existing (maybe unverified) account is active.
+                if (!existing[Users.emailVerified]) {
+                    Users.update({ Users.id eq existing[Users.id] }) { it[emailVerified] = true }
+                }
+                existing[Users.id]
+            } else {
+                val id = UUID.randomUUID()
+                Users.insert {
+                    it[Users.id] = id
+                    it[Users.email] = email
+                    it[displayName] = identity.displayName
+                    it[passwordHash] = null // OAuth-only account
+                    it[emailVerified] = true
+                    it[createdAt] = now()
+                }
+                id
+            }
+            issueTokens(userId, email)
+        }
     }
 
     /** Rotates the refresh token: the presented one is revoked and a new pair is issued. */

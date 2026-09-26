@@ -3,6 +3,7 @@ package com.example.questly.backend
 import com.example.questly.backend.auth.AuthService
 import com.example.questly.backend.auth.BrevoEmailSender
 import com.example.questly.backend.auth.EmailSender
+import com.example.questly.backend.auth.GoogleVerifier
 import com.example.questly.backend.auth.JwtConfig
 import com.example.questly.backend.auth.LoggingEmailSender
 import com.example.questly.backend.auth.authRoutes
@@ -31,7 +32,7 @@ fun Application.module() {
 
     val jwt = JwtConfig.fromEnv()
     configureAuthentication(jwt)
-    val authService = AuthService(jwt, emailSender())
+    val authService = AuthService(jwt, emailSender(), GoogleVerifier(Env["GOOGLE_WEB_CLIENT_ID"] ?: ""))
     // One CheckpointsService so check-in validation reuses the same cache the map query warms.
     val checkpointsService = CheckpointsService(OverpassClient())
     val checkInService = CheckInService(checkpointsService)

@@ -38,6 +38,9 @@ fun Route.authRoutes(service: AuthService) {
         post("/login") {
             call.respond(HttpStatusCode.OK, service.login(call.receive()))
         }
+        post("/google") {
+            call.respond(HttpStatusCode.OK, service.googleSignIn(call.receive<GoogleSignInRequest>().idToken))
+        }
         post("/refresh") {
             call.respond(HttpStatusCode.OK, service.refresh(call.receive()))
         }

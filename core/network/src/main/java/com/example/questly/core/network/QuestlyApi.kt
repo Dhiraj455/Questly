@@ -63,6 +63,7 @@ class QuestlyApi @Inject constructor(private val tokens: TokenStore) {
         })
     }
     suspend fun login(email: String, password: String): TokenPair = io(client.post(url("/auth/login")) { contentType(ContentType.Application.Json); setBody(LoginRequest(email, password)) }).body<TokenPair>().also(tokens::save)
+    suspend fun googleSignIn(idToken: String): TokenPair = io(client.post(url("/auth/google")) { contentType(ContentType.Application.Json); setBody(GoogleSignInRequest(idToken)) }).body<TokenPair>().also(tokens::save)
     suspend fun checkpoints(lat: Double, lng: Double, radius: Double): List<CheckpointDto> = authorizedGet("/checkpoints?lat=$lat&lng=$lng&radiusMeters=$radius").body()
     suspend fun history(): CheckInPage = authorizedGet("/checkins").body()
     suspend fun points(): PointsDto = authorizedGet("/points").body()
@@ -125,6 +126,7 @@ class BackendCheckpointClient @Inject constructor(private val api: QuestlyApi) :
 }
 @Serializable data class RegisterRequest(val email: String, val password: String, val displayName: String)
 @Serializable data class LoginRequest(val email: String, val password: String)
+@Serializable data class GoogleSignInRequest(val idToken: String)
 @Serializable data class RefreshRequest(val refreshToken: String)
 @Serializable data class TokenPair(val accessToken: String, val refreshToken: String, val expiresInSeconds: Long)
 @Serializable data class CheckpointDto(val id: String, val title: String, val description: String = "", val lat: Double, val lng: Double, val radiusMeters: Double, val points: Int, val category: String)
