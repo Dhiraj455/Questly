@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("questly.android.library")
     alias(libs.plugins.ksp)
@@ -5,8 +7,19 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Backend base URL. Defaults to the emulator's host alias for local dev; override in
+// local.properties (QUESTLY_API_BASE_URL=https://your-app.onrender.com/v1) to use the deployed API.
+val apiBaseUrl: String = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}.getProperty("QUESTLY_API_BASE_URL", "http://10.0.2.2:8081/v1")
+
 android {
     namespace = "com.example.questly.core.network"
+    buildFeatures { buildConfig = true }
+    defaultConfig {
+        buildConfigField("String", "QUESTLY_API_BASE_URL", "\"$apiBaseUrl\"")
+    }
 }
 
 dependencies {

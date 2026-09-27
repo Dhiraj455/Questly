@@ -26,9 +26,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// Android Emulator's alias for the host machine. The local backend is configured through
-// backend/.env to run on port 8081.
-private const val API = "http://10.0.2.2:8081/v1"
+// Backend base URL, from BuildConfig (QUESTLY_API_BASE_URL in local.properties). Defaults to the
+// Android emulator's host alias (http://10.0.2.2:8081/v1) for local dev.
+private val API = BuildConfig.QUESTLY_API_BASE_URL
 
 @Singleton
 class TokenStore @Inject constructor(@ApplicationContext context: Context) {
