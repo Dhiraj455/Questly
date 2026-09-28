@@ -20,6 +20,12 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
                 sourceCompatibility = JavaVersion.VERSION_11
                 targetCompatibility = JavaVersion.VERSION_11
             }
+            testOptions {
+                // JVM unit tests don't ship the android.jar stubs, so calls like android.util.Log
+                // throw "Method not mocked" by default. Return defaults instead so logging in
+                // production code doesn't break otherwise-pure unit tests.
+                unitTests.isReturnDefaultValues = true
+            }
         }
     }
 }

@@ -57,14 +57,15 @@ interface OverpassClient {
 
 /** Server-side Overpass client: fetches, classifies, and maps quest POIs to checkpoints. */
 class HttpOverpassClient(
-    // Multiple public mirrors: the primary frequently rate-limits/times out from shared cloud IPs,
-    // so we fail over to the next endpoint before giving up.
+    // Only FULL-PLANET public instances. Regional mirrors (e.g. overpass.osm.ch = Switzerland only,
+    // maps.mail.ru = Russia) answer 200 with zero elements for anywhere they don't cover, which the
+    // failover would wrongly accept as "no quests here". The canonical instance is first (most
+    // complete + confirmed reachable); when it rate-limits/times out from a shared cloud IP we fail
+    // over to the other global mirrors.
     private val endpoints: List<String> = listOf(
-        // Mirrors first — the canonical overpass-api.de rate-limits shared cloud IPs (Render) with 429/504.
-        "https://overpass.private.coffee/api/interpreter",
-        "https://overpass.osm.ch/api/interpreter",
-        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
         "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
     ),
 ) : OverpassClient {
     private val client = HttpClient(CIO) {
@@ -99,9 +100,21 @@ class HttpOverpassClient(
                     contentType(ContentType.Application.FormUrlEncoded)
                     setBody(body)
                 }
-                if (response.status.isSuccess()) return parse(response.bodyAsText())
-                lastError = IOException("Overpass HTTP ${response.status} @ $endpoint")
-                log.warn("Overpass endpoint failed: {} {}", endpoint, response.status)
+                if (!response.status.isSuccess()) {
+                    lastError = IOException("Overpass HTTP ${response.status} @ $endpoint")
+                    log.warn("Overpass endpoint failed: {} {}", endpoint, response.status)
+                    continue
+                }
+                val parsed = json.decodeFromString<OverpassResponse>(response.bodyAsText())
+                // Overpass answers 200 with a "remark" and no data when the query errors/times out
+                // server-side. Treat that as a soft failure so we fail over instead of reporting
+                // an empty (but real-looking) result to the user.
+                if (parsed.elements.isEmpty() && parsed.remark != null) {
+                    lastError = IOException("Overpass remark @ $endpoint: ${parsed.remark}")
+                    log.warn("Overpass soft error: {} - {}", endpoint, parsed.remark)
+                    continue
+                }
+                return parsed.elements.mapNotNull { it.toCheckpoint() }
             } catch (e: Exception) {
                 lastError = e
                 log.warn("Overpass endpoint error: {} - {}", endpoint, e.message)
@@ -125,9 +138,6 @@ class HttpOverpassClient(
             out center $MAX_ELEMENTS;
         """.trimIndent()
     }
-
-    private fun parse(raw: String): List<CheckpointDto> =
-        json.decodeFromString<OverpassResponse>(raw).elements.mapNotNull { it.toCheckpoint() }
 
     private fun OverpassElement.toCheckpoint(): CheckpointDto? {
         val name = tags["name"]?.takeIf { it.isNotBlank() } ?: return null
@@ -156,7 +166,10 @@ class HttpOverpassClient(
     }
 
     @Serializable
-    private data class OverpassResponse(val elements: List<OverpassElement> = emptyList())
+    private data class OverpassResponse(
+        val elements: List<OverpassElement> = emptyList(),
+        val remark: String? = null,
+    )
 
     @Serializable
     private data class OverpassElement(
