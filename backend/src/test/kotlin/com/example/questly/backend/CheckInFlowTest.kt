@@ -58,7 +58,18 @@ class CheckInFlowTest {
         header("Authorization", "Bearer $token")
         header("Idempotency-Key", key)
         contentType(ContentType.Application.Json)
-        setBody(body("checkpointId" to TEST_CHECKPOINT.id, "lat" to lat, "lng" to lng, "clientTimestamp" to timestamp))
+        setBody(
+            body(
+                "checkpointId" to TEST_CHECKPOINT.id,
+                "lat" to lat,
+                "lng" to lng,
+                "clientTimestamp" to timestamp,
+                "checkpointLat" to TEST_CHECKPOINT.lat,
+                "checkpointLng" to TEST_CHECKPOINT.lng,
+                "category" to TEST_CHECKPOINT.category,
+                "title" to TEST_CHECKPOINT.title,
+            ),
+        )
     }
 
     @Test
@@ -125,7 +136,18 @@ class CheckInFlowTest {
         val res = client.post("/v1/checkins") {
             header("Idempotency-Key", UUID.randomUUID().toString())
             contentType(ContentType.Application.Json)
-            setBody(body("checkpointId" to TEST_CHECKPOINT.id, "lat" to TEST_CHECKPOINT.lat, "lng" to TEST_CHECKPOINT.lng, "clientTimestamp" to now))
+            setBody(
+                body(
+                    "checkpointId" to TEST_CHECKPOINT.id,
+                    "lat" to TEST_CHECKPOINT.lat,
+                    "lng" to TEST_CHECKPOINT.lng,
+                    "clientTimestamp" to now,
+                    "checkpointLat" to TEST_CHECKPOINT.lat,
+                    "checkpointLng" to TEST_CHECKPOINT.lng,
+                    "category" to TEST_CHECKPOINT.category,
+                    "title" to TEST_CHECKPOINT.title,
+                ),
+            )
         }
         assertEquals(HttpStatusCode.Unauthorized, res.status)
     }

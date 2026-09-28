@@ -1,11 +1,11 @@
 package com.example.questly.backend.checkins
 
 import com.example.questly.backend.auth.ApiException
-import com.example.questly.backend.checkpoints.CheckpointsService
+import com.example.questly.backend.checkpoints.CHECK_IN_RADIUS_M
 import com.example.questly.backend.checkpoints.distanceMeters
+import com.example.questly.backend.checkpoints.pointsForCategory
 import com.example.questly.backend.db.CheckIns
 import io.ktor.http.HttpStatusCode
-import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
@@ -22,10 +22,12 @@ private const val COOLDOWN_SECONDS = 60 * 60L
 private const val MAX_CLIENT_CLOCK_SKEW_SECONDS = 5 * 60L
 
 /**
- * Validates a check-in against the checkpoint returned by Overpass, then writes the immutable
- * server ledger. The client never sends the title or point value, so it cannot inflate rewards.
+ * Validates a check-in and writes the immutable server ledger. The app supplies the checkpoint's
+ * location + category (it fetched them from Overpass directly, since public Overpass servers block
+ * this host's datacenter IP); the server still enforces distance, cooldown and clock sanity, and
+ * derives the point value from the category table — the client can never inflate its own rewards.
  */
-class CheckInService(private val checkpoints: CheckpointsService) {
+class CheckInService {
     private fun now() = OffsetDateTime.now(ZoneOffset.UTC)
 
     suspend fun create(userId: UUID, key: UUID, request: CheckInRequest): CheckInDto {
@@ -42,23 +44,26 @@ class CheckInService(private val checkpoints: CheckpointsService) {
             reject("IMPLAUSIBLE", "Device time is too far from server time")
         }
 
-        // Return a prior result before calling Overpass. This makes network retries safe and cheap.
+        // Return a prior result up front. This makes network retries safe and cheap.
         existingForKey(userId, key)?.let { return it }
 
-        val checkpoint = try {
-            checkpoints.resolve(request.checkpointId)
-        } catch (_: IOException) {
-            throw ApiException(HttpStatusCode.BadGateway, "overpass_unavailable", "Couldn't verify the checkpoint right now")
-        } ?: reject("UNKNOWN_CHECKPOINT", "Checkpoint no longer exists")
-        if (distanceMeters(request.lat, request.lng, checkpoint.lat, checkpoint.lng) > checkpoint.radiusMeters) {
+        // Validate the checkpoint the app supplied and derive its point value server-side.
+        if (!request.checkpointLat.isFinite() || !request.checkpointLng.isFinite() ||
+            request.checkpointLat !in -90.0..90.0 || request.checkpointLng !in -180.0..180.0
+        ) {
+            reject("UNKNOWN_CHECKPOINT", "Checkpoint location is invalid")
+        }
+        val points = pointsForCategory(request.category)
+            ?: reject("UNKNOWN_CHECKPOINT", "Unknown checkpoint category")
+        if (distanceMeters(request.lat, request.lng, request.checkpointLat, request.checkpointLng) > CHECK_IN_RADIUS_M) {
             reject("TOO_FAR", "You need to be closer to this checkpoint")
         }
 
         return newSuspendedTransaction(Dispatchers.IO) {
-            // Another request may have inserted while Overpass was loading.
+            // Another request with the same key may have inserted concurrently.
             existingForKeyInTransaction(userId, key)?.let { return@newSuspendedTransaction it }
             val last = CheckIns.selectAll()
-                .where { (CheckIns.userId eq userId) and (CheckIns.checkpointId eq checkpoint.id) }
+                .where { (CheckIns.userId eq userId) and (CheckIns.checkpointId eq request.checkpointId) }
                 .orderBy(CheckIns.createdAt to org.jetbrains.exposed.sql.SortOrder.DESC)
                 .limit(1)
                 .firstOrNull()
@@ -73,16 +78,16 @@ class CheckInService(private val checkpoints: CheckpointsService) {
             CheckIns.insert {
                 it[CheckIns.id] = id
                 it[CheckIns.userId] = userId
-                it[checkpointId] = checkpoint.id
-                it[title] = checkpoint.title
-                it[points] = checkpoint.points
+                it[checkpointId] = request.checkpointId
+                it[title] = request.title
+                it[CheckIns.points] = points
                 it[clientLat] = request.lat
                 it[clientLng] = request.lng
                 it[clientTimestamp] = clientTime
                 it[createdAt] = current
                 it[idempotencyKey] = key
             }
-            CheckInDto(id.toString(), checkpoint.id, checkpoint.title, checkpoint.points, current.toString())
+            CheckInDto(id.toString(), request.checkpointId, request.title, points, current.toString())
         }
     }
 

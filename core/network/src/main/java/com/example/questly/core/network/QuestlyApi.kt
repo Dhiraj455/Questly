@@ -76,11 +76,21 @@ class QuestlyApi @Inject constructor(private val tokens: TokenStore) {
     suspend fun checkpoints(lat: Double, lng: Double, radius: Double): List<CheckpointDto> = authorizedGet("/checkpoints?lat=$lat&lng=$lng&radiusMeters=$radius").body()
     suspend fun history(): CheckInPage = authorizedGet("/checkins").body()
     suspend fun points(): PointsDto = authorizedGet("/points").body()
-    suspend fun checkIn(id: String, lat: Double, lng: Double, time: String, key: String): CheckInDto {
+    suspend fun checkIn(
+        id: String,
+        userLat: Double,
+        userLng: Double,
+        time: String,
+        key: String,
+        checkpointLat: Double,
+        checkpointLng: Double,
+        category: String,
+        title: String,
+    ): CheckInDto {
         val response = authorizedPost("/checkins") {
             header("Idempotency-Key", key)
             contentType(ContentType.Application.Json)
-            setBody(CheckInRequest(id, lat, lng, time))
+            setBody(CheckInRequest(id, userLat, userLng, time, checkpointLat, checkpointLng, category, title))
         }
         return when {
             response.status.value in 200..299 -> response.body()
@@ -139,7 +149,16 @@ class BackendCheckpointClient @Inject constructor(private val api: QuestlyApi) :
 @Serializable data class RefreshRequest(val refreshToken: String)
 @Serializable data class TokenPair(val accessToken: String, val refreshToken: String, val expiresInSeconds: Long)
 @Serializable data class CheckpointDto(val id: String, val title: String, val description: String = "", val lat: Double, val lng: Double, val radiusMeters: Double, val points: Int, val category: String)
-@Serializable data class CheckInRequest(val checkpointId: String, val lat: Double, val lng: Double, val clientTimestamp: String)
+@Serializable data class CheckInRequest(
+    val checkpointId: String,
+    val lat: Double,
+    val lng: Double,
+    val clientTimestamp: String,
+    val checkpointLat: Double,
+    val checkpointLng: Double,
+    val category: String,
+    val title: String,
+)
 @Serializable data class CheckInDto(val id: String, val checkpointId: String, val title: String, val points: Int, val timestamp: String)
 @Serializable data class CheckInPage(val items: List<CheckInDto>)
 @Serializable data class PointsDto(val total: Int)

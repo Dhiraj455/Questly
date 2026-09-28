@@ -399,12 +399,19 @@ components:
 
     CheckInRequest:
       type: object
-      required: [checkpointId, lat, lng, clientTimestamp]
+      required: [checkpointId, lat, lng, clientTimestamp, checkpointLat, checkpointLng, category, title]
       properties:
         checkpointId: { type: string }
-        lat: { type: number, format: double }
-        lng: { type: number, format: double }
+        lat: { type: number, format: double, description: The user's current latitude. }
+        lng: { type: number, format: double, description: The user's current longitude. }
         clientTimestamp: { type: string, format: date-time }
+        checkpointLat: { type: number, format: double, description: The checkpoint's latitude (from the client's Overpass fetch). }
+        checkpointLng: { type: number, format: double, description: The checkpoint's longitude. }
+        category:
+          type: string
+          enum: [PARK, BEACH, VIEWPOINT, LANDMARK]
+          description: Drives the server-computed point award; a client-sent point total is never trusted.
+        title: { type: string }
 
     CheckIn:
       type: object

@@ -1,5 +1,6 @@
 package com.example.questly.core.data
 
+import com.example.questly.core.database.CheckpointDao
 import com.example.questly.core.model.CheckIn
 import com.example.questly.core.network.CheckInRejectedException
 import com.example.questly.core.network.QuestlyApi
@@ -15,7 +16,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class RemoteCheckInRepository @Inject constructor(private val api: QuestlyApi) : CheckInRepository {
+class RemoteCheckInRepository @Inject constructor(
+    private val api: QuestlyApi,
+    private val checkpointDao: CheckpointDao,
+) : CheckInRepository {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val history = MutableStateFlow<List<CheckIn>>(emptyList())
     private val total = MutableStateFlow(0)
@@ -23,7 +27,21 @@ class RemoteCheckInRepository @Inject constructor(private val api: QuestlyApi) :
     override fun observeCheckIns() = history.asStateFlow()
     override fun observePoints() = total.asStateFlow()
     override suspend fun recordCheckIn(checkpointId: String, userLat: Double, userLng: Double, nowMillis: Long): CheckInResult = try {
-        api.checkIn(checkpointId, userLat, userLng, Instant.ofEpochMilli(nowMillis).toString(), UUID.randomUUID().toString())
+        // The backend can't reach Overpass, so it validates against the checkpoint we send. Pull it
+        // from the local cache (populated by discovery); the server still enforces distance/cooldown
+        // and recomputes points from the category, so this can't be used to forge a reward.
+        val cp = checkpointDao.getById(checkpointId) ?: return CheckInResult.UnknownCheckpoint
+        api.checkIn(
+            id = checkpointId,
+            userLat = userLat,
+            userLng = userLng,
+            time = Instant.ofEpochMilli(nowMillis).toString(),
+            key = UUID.randomUUID().toString(),
+            checkpointLat = cp.lat,
+            checkpointLng = cp.lng,
+            category = cp.category,
+            title = cp.title,
+        )
         reload(); CheckInResult.Success
     } catch (e: CheckInRejectedException) {
         when (e.reason) {

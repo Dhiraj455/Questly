@@ -20,7 +20,7 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-private enum class PoiKind { PARK, BEACH, VIEWPOINT, LANDMARK }
+enum class PoiKind { PARK, BEACH, VIEWPOINT, LANDMARK }
 
 private fun pointsFor(kind: PoiKind) = when (kind) {
     PoiKind.PARK -> 50
@@ -29,6 +29,14 @@ private fun pointsFor(kind: PoiKind) = when (kind) {
     PoiKind.LANDMARK -> 60
 }
 
+/**
+ * Server-authoritative point value for a checkpoint [category] (PARK/BEACH/VIEWPOINT/LANDMARK),
+ * or null if the category is unknown. Check-in awards are computed from this table, never from a
+ * value the client sends, so rewards can't be inflated.
+ */
+fun pointsForCategory(category: String): Int? =
+    runCatching { PoiKind.valueOf(category.uppercase()) }.getOrNull()?.let(::pointsFor)
+
 private fun descriptionFor(kind: PoiKind) = when (kind) {
     PoiKind.PARK -> "Explore this park to earn points."
     PoiKind.BEACH -> "Visit this beach to earn points."
@@ -36,7 +44,7 @@ private fun descriptionFor(kind: PoiKind) = when (kind) {
     PoiKind.LANDMARK -> "Visit this landmark to earn points."
 }
 
-private const val CHECK_IN_RADIUS_M = 150.0
+const val CHECK_IN_RADIUS_M = 150.0
 private const val MAX_ELEMENTS = 200
 
 /** Great-circle distance in metres. */

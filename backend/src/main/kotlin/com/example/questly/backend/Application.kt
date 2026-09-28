@@ -40,9 +40,11 @@ fun Application.module(
     val jwt = JwtConfig.fromEnv()
     configureAuthentication(jwt)
     val authService = AuthService(jwt, emailSender, GoogleVerifier(Env["GOOGLE_WEB_CLIENT_ID"] ?: ""))
-    // One CheckpointsService so check-in validation reuses the same cache the map query warms.
+    // The app fetches checkpoints from Overpass directly (this host's datacenter IP is blocked by
+    // public Overpass servers), so the check-in service validates against the checkpoint the app
+    // sends and needs no Overpass access of its own.
     val checkpointsService = CheckpointsService(overpass)
-    val checkInService = CheckInService(checkpointsService)
+    val checkInService = CheckInService()
 
     configureRouting() // GET /health
     routing {
