@@ -63,16 +63,20 @@ class HttpOverpassClient(
     // complete + confirmed reachable); when it rate-limits/times out from a shared cloud IP we fail
     // over to the other global mirrors.
     private val endpoints: List<String> = listOf(
+        // Ordered by what actually works from Render's datacenter IP: private.coffee answers,
+        // overpass-api.de refuses cloud IPs (instant fail = cheap fallback), kumi hangs (last).
+        "https://overpass.private.coffee/api/interpreter",
         "https://overpass-api.de/api/interpreter",
         "https://overpass.kumi.systems/api/interpreter",
-        "https://overpass.private.coffee/api/interpreter",
     ),
 ) : OverpassClient {
     private val client = HttpClient(CIO) {
         install(HttpTimeout) {
-            requestTimeoutMillis = 30_000
-            connectTimeoutMillis = 15_000
-            socketTimeoutMillis = 30_000
+            // Kept tight so a dead/hung mirror fails over in seconds instead of stalling the
+            // whole request for 30s. A healthy Overpass answers a radius query well within this.
+            requestTimeoutMillis = 18_000
+            connectTimeoutMillis = 6_000
+            socketTimeoutMillis = 18_000
         }
     }
     private val log = LoggerFactory.getLogger(HttpOverpassClient::class.java)
