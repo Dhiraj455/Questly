@@ -1,5 +1,6 @@
 package com.example.questly.core.data
 
+import android.util.Log
 import com.example.questly.core.database.CheckpointDao
 import com.example.questly.core.model.Checkpoint
 import com.example.questly.core.model.distanceMeters
@@ -26,6 +27,7 @@ class RemoteCheckpointRepository @Inject constructor(
             overpassClient.query(lat, lng, radiusMeters)
         } catch (e: Exception) {
             // Keep the cached quests on a network/HTTP blip rather than wiping them.
+            Log.w("Questly", "checkpoint refresh failed for ($lat,$lng r=$radiusMeters)", e)
             return RefreshResult.Error(e.message ?: "Couldn't reach the quest service")
         }
         val entities = pois

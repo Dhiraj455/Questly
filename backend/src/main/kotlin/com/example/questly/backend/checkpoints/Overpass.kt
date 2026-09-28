@@ -2,6 +2,7 @@ package com.example.questly.backend.checkpoints
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.header
 import io.ktor.client.request.setBody
 import io.ktor.client.request.post
@@ -11,6 +12,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
 import java.io.IOException
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -55,9 +57,24 @@ interface OverpassClient {
 
 /** Server-side Overpass client: fetches, classifies, and maps quest POIs to checkpoints. */
 class HttpOverpassClient(
-    private val endpoint: String = "https://overpass-api.de/api/interpreter",
+    // Multiple public mirrors: the primary frequently rate-limits/times out from shared cloud IPs,
+    // so we fail over to the next endpoint before giving up.
+    private val endpoints: List<String> = listOf(
+        // Mirrors first — the canonical overpass-api.de rate-limits shared cloud IPs (Render) with 429/504.
+        "https://overpass.private.coffee/api/interpreter",
+        "https://overpass.osm.ch/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+        "https://overpass-api.de/api/interpreter",
+    ),
 ) : OverpassClient {
-    private val client = HttpClient(CIO)
+    private val client = HttpClient(CIO) {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 30_000
+            connectTimeoutMillis = 15_000
+            socketTimeoutMillis = 30_000
+        }
+    }
+    private val log = LoggerFactory.getLogger(HttpOverpassClient::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
     /** Throws IOException on network/HTTP failure so the caller can serve cache or a 502. */
@@ -74,15 +91,23 @@ class HttpOverpassClient(
 
     private suspend fun execute(query: String): List<CheckpointDto> {
         val body = "data=" + query
-        val response = client.post(endpoint) {
-            header("User-Agent", "Questly/1.0 (backend)")
-            contentType(ContentType.Application.FormUrlEncoded)
-            setBody(body)
+        var lastError: Exception? = null
+        for (endpoint in endpoints) {
+            try {
+                val response = client.post(endpoint) {
+                    header("User-Agent", "Questly/1.0 (backend)")
+                    contentType(ContentType.Application.FormUrlEncoded)
+                    setBody(body)
+                }
+                if (response.status.isSuccess()) return parse(response.bodyAsText())
+                lastError = IOException("Overpass HTTP ${response.status} @ $endpoint")
+                log.warn("Overpass endpoint failed: {} {}", endpoint, response.status)
+            } catch (e: Exception) {
+                lastError = e
+                log.warn("Overpass endpoint error: {} - {}", endpoint, e.message)
+            }
         }
-        if (!response.status.isSuccess()) {
-            throw IOException("Overpass HTTP ${response.status}")
-        }
-        return parse(response.bodyAsText())
+        throw IOException("All Overpass endpoints failed", lastError)
     }
 
     private fun buildQuery(lat: Double, lng: Double, radiusMeters: Double): String {
