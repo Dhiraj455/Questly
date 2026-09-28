@@ -47,20 +47,26 @@ fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Doub
     return r * 2 * atan2(sqrt(a), sqrt(1 - a))
 }
 
+/** Source of quest checkpoints. Swappable so tests don't hit the real Overpass network. */
+interface OverpassClient {
+    suspend fun query(lat: Double, lng: Double, radiusMeters: Double): List<CheckpointDto>
+    suspend fun findById(checkpointId: String): CheckpointDto?
+}
+
 /** Server-side Overpass client: fetches, classifies, and maps quest POIs to checkpoints. */
-class OverpassClient(
+class HttpOverpassClient(
     private val endpoint: String = "https://overpass-api.de/api/interpreter",
-) {
+) : OverpassClient {
     private val client = HttpClient(CIO)
     private val json = Json { ignoreUnknownKeys = true }
 
     /** Throws IOException on network/HTTP failure so the caller can serve cache or a 502. */
-    suspend fun query(lat: Double, lng: Double, radiusMeters: Double): List<CheckpointDto> {
+    override suspend fun query(lat: Double, lng: Double, radiusMeters: Double): List<CheckpointDto> {
         return execute(buildQuery(lat, lng, radiusMeters))
     }
 
     /** Fetches one stable Overpass element, allowing check-in validation without trusting the app. */
-    suspend fun findById(checkpointId: String): CheckpointDto? {
+    override suspend fun findById(checkpointId: String): CheckpointDto? {
         val match = Regex("^(node|way|relation)/(\\d+)$").matchEntire(checkpointId) ?: return null
         val query = "[out:json][timeout:25];${match.groupValues[1]}(${match.groupValues[2]});out center 1;"
         return execute(query).firstOrNull()

@@ -7,6 +7,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
@@ -51,7 +52,15 @@ class TokenStore @Inject constructor(@ApplicationContext context: Context) {
 
 @Singleton
 class QuestlyApi @Inject constructor(private val tokens: TokenStore) {
-    private val client = HttpClient(OkHttp) { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
+    private val client = HttpClient(OkHttp) {
+        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        // Tolerate free-tier cold starts and the backend's own Overpass round-trip.
+        install(HttpTimeout) {
+            connectTimeoutMillis = 30_000
+            requestTimeoutMillis = 60_000
+            socketTimeoutMillis = 60_000
+        }
+    }
     private val refreshMutex = Mutex()
     private fun url(path: String) = "$API$path"
     private fun io(response: HttpResponse): HttpResponse { if (response.status.value !in 200..299) throw ApiFailure(response.status.value); return response }

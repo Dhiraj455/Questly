@@ -46,15 +46,16 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.12")
 
     testImplementation("io.ktor:ktor-server-test-host:$ktor")
+    testImplementation("io.ktor:ktor-client-content-negotiation:$ktor")
     testImplementation(kotlin("test"))
+    // Integration tests against a real PostgreSQL in a container
+    testImplementation("org.testcontainers:postgresql:1.21.3")
 }
 
 application {
     mainClass.set("com.example.questly.backend.ApplicationKt")
 }
 
-// Flyway 10 and Ktor 3 need JDK 17+. The Gradle daemon runs on a newer JDK, so target 17
-// without requiring a toolchain download.
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
@@ -63,4 +64,11 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    // On Windows, point Testcontainers at Docker Desktop's pipe unless DOCKER_HOST is already set
+    // (e.g. to a TCP endpoint). CI/Linux/macOS auto-detect the standard socket.
+    if (System.getProperty("os.name").startsWith("Windows") && System.getenv("DOCKER_HOST").isNullOrBlank()) {
+        environment("DOCKER_HOST", "npipe:////./pipe/dockerDesktopLinuxEngine")
+    }
+}

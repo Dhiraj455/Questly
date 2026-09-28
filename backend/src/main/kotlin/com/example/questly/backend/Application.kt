@@ -8,6 +8,7 @@ import com.example.questly.backend.auth.JwtConfig
 import com.example.questly.backend.auth.LoggingEmailSender
 import com.example.questly.backend.auth.authRoutes
 import com.example.questly.backend.checkpoints.CheckpointsService
+import com.example.questly.backend.checkpoints.HttpOverpassClient
 import com.example.questly.backend.checkpoints.OverpassClient
 import com.example.questly.backend.checkpoints.checkpointRoutes
 import com.example.questly.backend.checkins.CheckInService
@@ -24,17 +25,23 @@ fun main() {
     embeddedServer(Netty, port = port, host = "0.0.0.0") { module() }.start(wait = true)
 }
 
-/** Full application wiring. Tests install only the pieces they need (see HealthCheckTest). */
-fun Application.module() {
+/**
+ * Full application wiring. [overpass] and [emailSender] are injectable so tests can supply fakes
+ * (see the Testcontainers tests); production uses the real HTTP Overpass client and Brevo/logging.
+ */
+fun Application.module(
+    overpass: OverpassClient = HttpOverpassClient(),
+    emailSender: EmailSender = defaultEmailSender(),
+) {
     configureDatabase()
     configureSerialization()
     configureStatusPages()
 
     val jwt = JwtConfig.fromEnv()
     configureAuthentication(jwt)
-    val authService = AuthService(jwt, emailSender(), GoogleVerifier(Env["GOOGLE_WEB_CLIENT_ID"] ?: ""))
+    val authService = AuthService(jwt, emailSender, GoogleVerifier(Env["GOOGLE_WEB_CLIENT_ID"] ?: ""))
     // One CheckpointsService so check-in validation reuses the same cache the map query warms.
-    val checkpointsService = CheckpointsService(OverpassClient())
+    val checkpointsService = CheckpointsService(overpass)
     val checkInService = CheckInService(checkpointsService)
 
     configureRouting() // GET /health
@@ -48,7 +55,7 @@ fun Application.module() {
 }
 
 /** Uses Brevo when BREVO_API_KEY + BREVO_SENDER_EMAIL are set; otherwise logs the link (dev). */
-private fun Application.emailSender(): EmailSender {
+private fun Application.defaultEmailSender(): EmailSender {
     val apiKey = Env["BREVO_API_KEY"]
     val sender = Env["BREVO_SENDER_EMAIL"]
     return if (!apiKey.isNullOrBlank() && !sender.isNullOrBlank()) {

@@ -10,7 +10,8 @@ import java.io.File
 object Env {
     private val dotenv: Map<String, String> by lazy { load() }
 
-    operator fun get(key: String): String? = System.getenv(key) ?: dotenv[key]
+    // Real env wins, then -D system properties (used by tests), then a local .env file.
+    operator fun get(key: String): String? = System.getenv(key) ?: System.getProperty(key) ?: dotenv[key]
 
     private fun load(): Map<String, String> {
         val file = listOf(File(".env"), File("backend/.env")).firstOrNull { it.exists() } ?: return emptyMap()
