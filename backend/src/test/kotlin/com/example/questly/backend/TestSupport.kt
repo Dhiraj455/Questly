@@ -17,6 +17,9 @@ object TestDb {
         System.setProperty("DATABASE_USER", username)
         System.setProperty("DATABASE_PASSWORD", password)
         System.setProperty("JWT_SECRET", "test-secret-not-used-in-production-000")
+        // The whole suite hits the auth routes from one loopback IP within a minute; keep the
+        // per-IP auth rate limit effectively unlimited so tests don't throttle each other.
+        System.setProperty("AUTH_RATE_LIMIT_PER_MINUTE", "1000000")
         Flyway.configure()
             .dataSource(jdbcUrl, username, password)
             .locations("classpath:db/migration")

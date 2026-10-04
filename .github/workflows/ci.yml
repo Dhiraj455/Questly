@@ -14,6 +14,33 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Make gradlew executable
         run: chmod +x gradlew
+      # google-services.json is untracked. Use the repo secret if present; otherwise write a stub so
+      # the google-services plugin is satisfied (CI only compiles/assembles — it never uses FCM).
+      - name: Provision google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          else
+            cat > app/google-services.json <<'EOF'
+          {
+            "project_info": { "project_number": "000000000000", "project_id": "ci-stub" },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                  "android_client_info": { "package_name": "com.example.questly" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "ci-stub-key" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
       - name: Unit tests
         run: ./gradlew testDebugUnitTest
       - name: Assemble

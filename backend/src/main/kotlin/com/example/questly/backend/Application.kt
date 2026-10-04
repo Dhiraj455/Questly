@@ -62,7 +62,9 @@ fun Application.module(
         // Throttle the unauthenticated auth surface (login/register/verify/google) per client IP to
         // blunt brute-force and signup spam. Generous enough never to bite normal use.
         register(AUTH_RATE_LIMIT) {
-            rateLimiter(limit = 20, refillPeriod = 1.minutes)
+            // Configurable so tests (which make many auth calls from one loopback IP) can raise it.
+            val perMinute = Env["AUTH_RATE_LIMIT_PER_MINUTE"]?.toIntOrNull() ?: 20
+            rateLimiter(limit = perMinute, refillPeriod = 1.minutes)
             requestKey { call -> call.request.origin.remoteHost }
         }
     }
