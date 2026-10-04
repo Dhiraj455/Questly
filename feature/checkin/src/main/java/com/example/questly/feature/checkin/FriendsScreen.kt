@@ -96,13 +96,13 @@ fun FriendsScreen(viewModel: FriendsViewModel = hiltViewModel()) {
                 RequestRow(
                     req,
                     onAccept = {
-                        viewModel.accept(req.id) {
-                            Toast.makeText(context, "Couldn't accept — check your connection and try again", Toast.LENGTH_SHORT).show()
+                        viewModel.accept(req.id) { reason ->
+                            Toast.makeText(context, "Couldn't accept — $reason", Toast.LENGTH_LONG).show()
                         }
                     },
                     onDecline = {
-                        viewModel.decline(req.id) {
-                            Toast.makeText(context, "Couldn't decline — try again", Toast.LENGTH_SHORT).show()
+                        viewModel.decline(req.id) { reason ->
+                            Toast.makeText(context, "Couldn't decline — $reason", Toast.LENGTH_LONG).show()
                         }
                     },
                 )

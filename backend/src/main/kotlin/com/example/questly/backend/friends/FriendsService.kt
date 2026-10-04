@@ -165,7 +165,16 @@ class FriendsService {
         }
     }
 
-    private fun order(a: UUID, b: UUID): Pair<UUID, UUID> = if (a < b) a to b else b to a
+    // Order a pair the same way Postgres orders the `uuid` type: UNSIGNED, big-endian. Java's
+    // UUID.compareTo is SIGNED on each 64-bit half, so for UUIDs with the high bit set it disagrees
+    // with Postgres — which would hand the `check (user_low < user_high)` constraint a row it rejects,
+    // 500ing the accept. Matching Postgres keeps every friendship insertable and lookups consistent.
+    private fun order(a: UUID, b: UUID): Pair<UUID, UUID> = if (unsignedCompare(a, b) < 0) a to b else b to a
+
+    private fun unsignedCompare(a: UUID, b: UUID): Int {
+        val high = java.lang.Long.compareUnsigned(a.mostSignificantBits, b.mostSignificantBits)
+        return if (high != 0) high else java.lang.Long.compareUnsigned(a.leastSignificantBits, b.leastSignificantBits)
+    }
 
     private fun displayNames(ids: List<UUID>): Map<UUID, String> {
         if (ids.isEmpty()) return emptyMap()

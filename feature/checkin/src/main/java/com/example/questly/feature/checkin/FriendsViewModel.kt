@@ -45,11 +45,11 @@ class FriendsViewModel @Inject constructor(
     fun addFriend(code: String, onResult: (AddFriendResult) -> Unit) =
         viewModelScope.launch { onResult(repo.addFriend(code)) }
 
-    fun accept(requestId: String, onError: () -> Unit = {}) =
-        viewModelScope.launch { if (!repo.accept(requestId)) onError() }
+    fun accept(requestId: String, onError: (String) -> Unit = {}) =
+        viewModelScope.launch { repo.accept(requestId)?.let(onError) }
 
-    fun decline(requestId: String, onError: () -> Unit = {}) =
-        viewModelScope.launch { if (!repo.decline(requestId)) onError() }
+    fun decline(requestId: String, onError: (String) -> Unit = {}) =
+        viewModelScope.launch { repo.decline(requestId)?.let(onError) }
 
     fun unfriend(userId: String) = viewModelScope.launch { repo.unfriend(userId) }
 }
