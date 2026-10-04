@@ -114,6 +114,14 @@ class AuthViewModel @Inject constructor(
         _loading.value = false
     }
 
+    /** Fetches the FCM token and registers it with the backend so this device can receive pushes. */
+    fun registerPushToken() {
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                viewModelScope.launch { runCatching { api.registerDevice(token) } }
+            }
+    }
+
     fun error(text: String) { _banner.value = Banner(text, true) }
     fun clearBanner() { _banner.value = null }
 }
@@ -122,7 +130,26 @@ class AuthViewModel @Inject constructor(
 fun AuthGate(content: @Composable () -> Unit) {
     val viewModel: AuthViewModel = hiltViewModel()
     val signedIn by viewModel.signedIn.collectAsState()
-    if (signedIn) content() else AuthScreen(viewModel)
+    if (signedIn) {
+        PushSetup(viewModel)
+        content()
+    } else {
+        AuthScreen(viewModel)
+    }
+}
+
+/** Once signed in: asks for notification permission (Android 13+) and registers the FCM token. */
+@Composable
+private fun PushSetup(viewModel: AuthViewModel) {
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { /* result ignored — pushes just won't show if denied */ }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+        viewModel.registerPushToken()
+    }
 }
 
 @Composable

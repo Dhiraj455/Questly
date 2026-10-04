@@ -21,10 +21,14 @@ servers:
 tags:
   - name: auth
     description: Registration, email verification, sign-in, sessions, account management
-  - name: checkpoints
-    description: Quest-worthy POIs, proxied + cached from Overpass server-side
   - name: checkins
     description: Server-validated check-ins, history, and points
+  - name: profile
+    description: Streaks and achievements derived from the check-in ledger
+  - name: friends
+    description: Friend codes, requests, friendships, and the activity feed
+  - name: devices
+    description: FCM device-token registration for push notifications
 
 security:
   - bearerAuth: []
@@ -235,37 +239,39 @@ paths:
         '204': { description: Account and associated data deleted }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-  # ----------------------------------------------------------- checkpoints
-  /checkpoints:
-    get:
-      tags: [checkpoints]
-      summary: Nearby quest checkpoints (Overpass proxied + cached server-side)
-      parameters:
-        - { name: lat, in: query, required: true, schema: { type: number, format: double } }
-        - { name: lng, in: query, required: true, schema: { type: number, format: double } }
-        - name: radiusMeters
-          in: query
-          required: true
-          schema: { type: number, format: double, minimum: 1000, maximum: 20000 }
-        - name: types
-          in: query
-          required: false
-          description: Optional CSV of categories to include (PARK, BEACH, VIEWPOINT, LANDMARK)
-          schema: { type: string }
+  # ---------------------------------------------------------------- devices
+  /devices:
+    post:
+      tags: [devices]
+      summary: Register this device's FCM token for push notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties: { token: { type: string } }
       responses:
-        '200':
-          description: Checkpoints within the radius, nearest first
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/Checkpoint' }
+        '204': { description: Registered }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '502':
-          description: Upstream (Overpass) unavailable and no cache to serve
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+
+  /devices/{token}:
+    delete:
+      tags: [devices]
+      summary: Unregister an FCM token (on sign-out)
+      parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Unregistered }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # WebSocket (not expressible in OpenAPI): GET /v1/leaderboard — JWT-authenticated upgrade. On
+  # connect the server sends a LeaderboardDto { entries: [{ userId, displayName, totalPoints, rank }] }
+  # and pushes a fresh one on every check-in.
+
+  # Checkpoint discovery is done on-device: the app queries Overpass directly (public Overpass
+  # servers block the backend's datacenter IP), so there is no server-side /checkpoints endpoint.
+  # The app supplies the checkpoint's location + category with each check-in instead.
 
   # -------------------------------------------------------------- checkins
   /checkins:
@@ -321,6 +327,107 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Points' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- profile
+  /profile:
+    get:
+      tags: [profile]
+      summary: The user's gamification profile — streak, totals, and achievements
+      responses:
+        '200':
+          description: Streak + totals and every achievement with progress
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- friends
+  /friends:
+    get:
+      tags: [friends]
+      summary: The user's friends (ranked by points) and incoming requests
+      responses:
+        '200':
+          description: Friends + incoming requests
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FriendsPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /friends/code:
+    get:
+      tags: [friends]
+      summary: The user's shareable friend code (allocated on first use)
+      responses:
+        '200':
+          description: The friend code
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FriendCode' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /friends/requests:
+    post:
+      tags: [friends]
+      summary: Send a friend request by code (auto-accepts if they already requested you)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties: { code: { type: string } }
+      responses:
+        '201': { description: Request sent (or friendship created on mutual) }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: NOT_FOUND / SELF / ALREADY_FRIENDS / ALREADY_REQUESTED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /friends/requests/{id}/accept:
+    post:
+      tags: [friends]
+      summary: Accept an incoming friend request
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '204': { description: Accepted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /friends/requests/{id}/decline:
+    post:
+      tags: [friends]
+      summary: Decline an incoming friend request
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '204': { description: Declined }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /friends/{userId}:
+    delete:
+      tags: [friends]
+      summary: Remove a friend
+      parameters: [{ name: userId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '204': { description: Removed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /feed:
+    get:
+      tags: [friends]
+      summary: Activity feed — recent check-ins by the user and their friends
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: A page of activity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedPage' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
 components:
@@ -382,21 +489,6 @@ components:
         emailVerified: { type: boolean }
         createdAt: { type: string, format: date-time }
 
-    Checkpoint:
-      type: object
-      required: [id, title, lat, lng, radiusMeters, points, category]
-      properties:
-        id: { type: string, description: Stable id, e.g. "node/123456" }
-        title: { type: string }
-        description: { type: string }
-        lat: { type: number, format: double }
-        lng: { type: number, format: double }
-        radiusMeters: { type: number, format: double }
-        points: { type: integer }
-        category:
-          type: string
-          enum: [PARK, BEACH, VIEWPOINT, LANDMARK, EVENT, CHALLENGE]
-
     CheckInRequest:
       type: object
       required: [checkpointId, lat, lng, clientTimestamp, checkpointLat, checkpointLng, category, title]
@@ -449,6 +541,89 @@ components:
       required: [total]
       properties:
         total: { type: integer }
+
+    Stats:
+      type: object
+      required: [currentStreakDays, longestStreakDays, totalCheckIns, totalPoints]
+      properties:
+        currentStreakDays: { type: integer }
+        longestStreakDays: { type: integer }
+        totalCheckIns: { type: integer }
+        totalPoints: { type: integer }
+
+    Achievement:
+      type: object
+      required: [id, title, description, target, value, earned]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        target: { type: integer, description: Metric value needed to earn it }
+        value: { type: integer, description: Current progress, capped at target }
+        earned: { type: boolean }
+
+    Profile:
+      type: object
+      required: [stats, achievements]
+      properties:
+        stats: { $ref: '#/components/schemas/Stats' }
+        achievements:
+          type: array
+          items: { $ref: '#/components/schemas/Achievement' }
+
+    FriendCode:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, example: "QSTLY-7K2P9M" }
+
+    Friend:
+      type: object
+      required: [userId, displayName, totalPoints]
+      properties:
+        userId: { type: string, format: uuid }
+        displayName: { type: string }
+        totalPoints: { type: integer }
+
+    FriendRequest:
+      type: object
+      required: [id, requesterId, requesterDisplayName, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        requesterId: { type: string, format: uuid }
+        requesterDisplayName: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    FriendsPage:
+      type: object
+      required: [friends, incomingRequests]
+      properties:
+        friends:
+          type: array
+          items: { $ref: '#/components/schemas/Friend' }
+        incomingRequests:
+          type: array
+          items: { $ref: '#/components/schemas/FriendRequest' }
+
+    FeedItem:
+      type: object
+      required: [id, userId, displayName, title, points, timestamp]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        displayName: { type: string }
+        title: { type: string }
+        points: { type: integer }
+        timestamp: { type: string, format: date-time }
+
+    FeedPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/FeedItem' }
+        nextCursor: { type: string, nullable: true }
 
     Error:
       type: object

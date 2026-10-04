@@ -1,8 +1,6 @@
 package com.example.questly.backend
 
 import com.example.questly.backend.auth.EmailSender
-import com.example.questly.backend.checkpoints.CheckpointDto
-import com.example.questly.backend.checkpoints.OverpassClient
 import org.flywaydb.core.Flyway
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
@@ -49,26 +47,25 @@ object TestDb {
         }
 }
 
-/** Overpass stand-in returning fixed checkpoints, so tests never hit the network. */
-class FakeOverpass(private val checkpoints: List<CheckpointDto>) : OverpassClient {
-    override suspend fun query(lat: Double, lng: Double, radiusMeters: Double) = checkpoints
-    override suspend fun findById(checkpointId: String) = checkpoints.firstOrNull { it.id == checkpointId }
-}
-
 /** Swallows emails in tests (the token is read from the DB instead). */
 object NoopEmailSender : EmailSender {
     override suspend fun sendVerification(toEmail: String, token: String) {}
     override suspend fun sendPasswordReset(toEmail: String, token: String) {}
 }
 
-/** A single quest checkpoint used by the check-in tests. */
-val TEST_CHECKPOINT = CheckpointDto(
+/** The checkpoint the check-in tests send — the app supplies these fields with each check-in. */
+data class TestCheckpoint(
+    val id: String,
+    val title: String,
+    val lat: Double,
+    val lng: Double,
+    val category: String,
+)
+
+val TEST_CHECKPOINT = TestCheckpoint(
     id = "node/1",
     title = "Test Landmark",
-    description = "Visit this landmark to earn points.",
     lat = 41.0,
     lng = -87.0,
-    radiusMeters = 150.0,
-    points = 60,
     category = "LANDMARK",
 )

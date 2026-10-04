@@ -12,8 +12,31 @@ object Users : Table("users") {
     val displayName = text("display_name")
     val passwordHash = text("password_hash").nullable()
     val emailVerified = bool("email_verified")
+    val friendCode = text("friend_code").nullable()
     val createdAt = timestampWithTimeZone("created_at")
     override val primaryKey = PrimaryKey(id)
+}
+
+object FriendRequests : Table("friend_requests") {
+    val id = uuid("id")
+    val requesterId = uuid("requester_id")
+    val addresseeId = uuid("addressee_id")
+    val createdAt = timestampWithTimeZone("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object Friendships : Table("friendships") {
+    val userLow = uuid("user_low")
+    val userHigh = uuid("user_high")
+    val createdAt = timestampWithTimeZone("created_at")
+    override val primaryKey = PrimaryKey(userLow, userHigh)
+}
+
+object DeviceTokens : Table("device_tokens") {
+    val token = text("token")
+    val userId = uuid("user_id")
+    val createdAt = timestampWithTimeZone("created_at")
+    override val primaryKey = PrimaryKey(token)
 }
 
 object EmailTokens : Table("email_tokens") {

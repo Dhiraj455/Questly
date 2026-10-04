@@ -19,3 +19,7 @@ local.properties
 .kotlin/
 # Local backend secrets (SMTP/OAuth/JWT); commit only .env.example
 .env
+
+# Firebase backend service-account key — a real secret, never commit it.
+# (app/google-services.json is client config embedded in the APK; it's fine to commit and keeps CI green.)
+backend/firebase-service-account.json

@@ -24,6 +24,13 @@ dependencies {
     implementation("io.ktor:ktor-server-call-logging:$ktor")
     implementation("io.ktor:ktor-server-auth:$ktor")
     implementation("io.ktor:ktor-server-auth-jwt:$ktor")
+    implementation("io.ktor:ktor-server-rate-limit:$ktor")
+    // Reads X-Forwarded-* so per-client rate limiting sees the real caller IP behind Render's proxy.
+    implementation("io.ktor:ktor-server-forwarded-header:$ktor")
+    // Real-time leaderboard pushed over WebSocket.
+    implementation("io.ktor:ktor-server-websockets:$ktor")
+    // Firebase Admin SDK for sending FCM push notifications (loads a service-account credential).
+    implementation("com.google.firebase:firebase-admin:9.4.1")
 
     // Auth: JWT issuing + password hashing
     implementation("com.auth0:java-jwt:4.4.0")

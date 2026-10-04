@@ -3,7 +3,10 @@ package com.example.questly.feature.checkin
 import app.cash.turbine.test
 import com.example.questly.core.data.CheckInRepository
 import com.example.questly.core.data.CheckInResult
+import com.example.questly.core.data.ProfileRepository
 import com.example.questly.core.model.CheckIn
+import com.example.questly.core.model.Profile
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -31,12 +34,18 @@ class PointsViewModelTest {
             CheckInResult.Success
     }
 
+    private class FakeProfileRepo : ProfileRepository {
+        val profile = MutableStateFlow<Profile?>(null)
+        override fun observeProfile(): StateFlow<Profile?> = profile
+        override suspend fun refresh() {}
+    }
+
     @Test fun stateReflectsRepositoryPointsAndHistory() = runTest {
         val repo = FakeCheckInRepo().apply {
             points.value = 50
             checkIns.value = listOf(CheckIn("c1", "hyde-park", 1000L))
         }
-        val vm = PointsViewModel(repo)
+        val vm = PointsViewModel(repo, FakeProfileRepo())
         vm.state.test {
             assertEquals(PointsUiState(), awaitItem()) // stateIn initial value
             assertEquals(

@@ -27,7 +27,11 @@ private const val MAX_CLIENT_CLOCK_SKEW_SECONDS = 5 * 60L
  * this host's datacenter IP); the server still enforces distance, cooldown and clock sanity, and
  * derives the point value from the category table — the client can never inflate its own rewards.
  */
-class CheckInService {
+class CheckInService(
+    // Invoked after a check-in is recorded (userId, checkpoint title, points) so the live leaderboard
+    // can rebroadcast and friends can be notified. Default no-op.
+    private val onCheckIn: suspend (UUID, String, Int) -> Unit = { _, _, _ -> },
+) {
     private fun now() = OffsetDateTime.now(ZoneOffset.UTC)
 
     suspend fun create(userId: UUID, key: UUID, request: CheckInRequest): CheckInDto {
@@ -59,7 +63,7 @@ class CheckInService {
             reject("TOO_FAR", "You need to be closer to this checkpoint")
         }
 
-        return newSuspendedTransaction(Dispatchers.IO) {
+        val result = newSuspendedTransaction(Dispatchers.IO) {
             // Another request with the same key may have inserted concurrently.
             existingForKeyInTransaction(userId, key)?.let { return@newSuspendedTransaction it }
             val last = CheckIns.selectAll()
@@ -89,6 +93,8 @@ class CheckInService {
             }
             CheckInDto(id.toString(), request.checkpointId, request.title, points, current.toString())
         }
+        onCheckIn(userId, request.title, points) // refresh leaderboard + notify friends
+        return result
     }
 
     suspend fun history(userId: UUID, limit: Int, cursor: String?): CheckInPage = newSuspendedTransaction(Dispatchers.IO) {

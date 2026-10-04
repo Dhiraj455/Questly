@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.google.services)
 }
 
 // Web OAuth client ID for Google Sign-In. Kept in local.properties (gitignored), not in source.
@@ -67,6 +68,9 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    // Firebase Cloud Messaging (push notifications)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
     implementation(project(":feature:map"))
     implementation(project(":feature:checkin"))
     implementation(project(":feature:discover"))

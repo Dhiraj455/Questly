@@ -25,6 +25,10 @@ class RemoteCheckpointRepository @Inject constructor(
     override suspend fun refresh(lat: Double, lng: Double, radiusMeters: Double): RefreshResult {
         val pois = try {
             overpassClient.query(lat, lng, radiusMeters)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // The caller (e.g. a new radius query, or leaving the screen) cancelled us — that's not
+            // a failure, so propagate it instead of showing "Couldn't refresh".
+            throw e
         } catch (e: Exception) {
             // Keep the cached quests on a network/HTTP blip rather than wiping them.
             Log.w("Questly", "checkpoint refresh failed for ($lat,$lng r=$radiusMeters)", e)

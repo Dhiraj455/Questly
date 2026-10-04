@@ -74,7 +74,7 @@ class CheckInFlowTest {
 
     @Test
     fun checkInAwardsPointsAndIsIdempotent() = testApplication {
-        application { module(overpass = FakeOverpass(listOf(TEST_CHECKPOINT)), emailSender = NoopEmailSender) }
+        application { module(emailSender = NoopEmailSender) }
         val client = jsonClient()
         val token = signedInToken(client, "carol@example.com")
         val key = UUID.randomUUID().toString()
@@ -97,7 +97,7 @@ class CheckInFlowTest {
 
     @Test
     fun cooldownRejectsASecondCheckIn() = testApplication {
-        application { module(overpass = FakeOverpass(listOf(TEST_CHECKPOINT)), emailSender = NoopEmailSender) }
+        application { module(emailSender = NoopEmailSender) }
         val client = jsonClient()
         val token = signedInToken(client, "dave@example.com")
 
@@ -109,7 +109,7 @@ class CheckInFlowTest {
 
     @Test
     fun tooFarIsRejected() = testApplication {
-        application { module(overpass = FakeOverpass(listOf(TEST_CHECKPOINT)), emailSender = NoopEmailSender) }
+        application { module(emailSender = NoopEmailSender) }
         val client = jsonClient()
         val token = signedInToken(client, "erin@example.com")
 
@@ -120,7 +120,7 @@ class CheckInFlowTest {
 
     @Test
     fun staleClientClockIsRejected() = testApplication {
-        application { module(overpass = FakeOverpass(listOf(TEST_CHECKPOINT)), emailSender = NoopEmailSender) }
+        application { module(emailSender = NoopEmailSender) }
         val client = jsonClient()
         val token = signedInToken(client, "frank@example.com")
 
@@ -131,7 +131,7 @@ class CheckInFlowTest {
 
     @Test
     fun checkInRequiresAuth() = testApplication {
-        application { module(overpass = FakeOverpass(listOf(TEST_CHECKPOINT)), emailSender = NoopEmailSender) }
+        application { module(emailSender = NoopEmailSender) }
         val client = jsonClient()
         val res = client.post("/v1/checkins") {
             header("Idempotency-Key", UUID.randomUUID().toString())

@@ -4,8 +4,14 @@ import android.content.Context
 import androidx.room.Room
 import com.example.questly.core.data.CheckInRepository
 import com.example.questly.core.data.CheckpointRepository
+import com.example.questly.core.data.FriendsRepository
+import com.example.questly.core.data.LeaderboardRepository
+import com.example.questly.core.data.ProfileRepository
 import com.example.questly.core.data.RemoteCheckInRepository
 import com.example.questly.core.data.RemoteCheckpointRepository
+import com.example.questly.core.data.RemoteFriendsRepository
+import com.example.questly.core.data.RemoteLeaderboardRepository
+import com.example.questly.core.data.RemoteProfileRepository
 import com.example.questly.core.database.CheckInDao
 import com.example.questly.core.database.CheckpointDao
 import com.example.questly.core.database.QuestlyDatabase
@@ -22,6 +28,9 @@ import javax.inject.Singleton
 abstract class DataBindingsModule {
     @Binds abstract fun checkpointRepo(impl: RemoteCheckpointRepository): CheckpointRepository
     @Binds abstract fun checkInRepo(impl: RemoteCheckInRepository): CheckInRepository
+    @Binds abstract fun profileRepo(impl: RemoteProfileRepository): ProfileRepository
+    @Binds abstract fun friendsRepo(impl: RemoteFriendsRepository): FriendsRepository
+    @Binds abstract fun leaderboardRepo(impl: RemoteLeaderboardRepository): LeaderboardRepository
 }
 
 @Module

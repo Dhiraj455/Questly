@@ -12,17 +12,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PinDrop
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,8 +38,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.questly.core.model.Achievement
 import com.example.questly.core.model.CheckIn
 
 @Composable
@@ -48,7 +56,21 @@ fun PointsScreen(viewModel: PointsViewModel = hiltViewModel()) {
         Spacer(Modifier.height(24.dp))
         Text("Rewards", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(16.dp))
-        PointsHeroCard(points = state.totalPoints, checkIns = state.history.size)
+        PointsHeroCard(
+            points = state.totalPoints,
+            checkIns = state.history.size,
+            currentStreak = state.profile?.currentStreakDays ?: 0,
+        )
+        val achievements = state.profile?.achievements.orEmpty()
+        if (achievements.isNotEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            val earned = achievements.count { it.earned }
+            Text("Achievements · $earned/${achievements.size}", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(achievements, key = { it.id }) { AchievementBadge(it) }
+            }
+        }
         Spacer(Modifier.height(24.dp))
         Text("Recent check-ins", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
@@ -63,7 +85,7 @@ fun PointsScreen(viewModel: PointsViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun PointsHeroCard(points: Int, checkIns: Int) {
+private fun PointsHeroCard(points: Int, checkIns: Int, currentStreak: Int) {
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -84,10 +106,28 @@ private fun PointsHeroCard(points: Int, checkIns: Int) {
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(
-                    "$checkIns check-in${if (checkIns == 1) "" else "s"}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        "$checkIns check-in${if (checkIns == 1) "" else "s"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (currentStreak > 0) {
+                        Text("·", style = MaterialTheme.typography.bodyMedium)
+                        Icon(
+                            Icons.Filled.LocalFireDepartment,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            "$currentStreak day streak",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
             }
             Box(
                 Modifier
@@ -101,6 +141,62 @@ private fun PointsHeroCard(points: Int, checkIns: Int) {
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.size(36.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AchievementBadge(achievement: Achievement) {
+    val earned = achievement.earned
+    val accent = if (earned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Card(
+        Modifier.width(120.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (earned) MaterialTheme.colorScheme.secondaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(
+            Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(if (earned) accent else MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (earned) Icons.Filled.EmojiEvents else Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = if (earned) MaterialTheme.colorScheme.onPrimary else accent,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Text(
+                achievement.title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (earned) {
+                Text("Earned", style = MaterialTheme.typography.labelSmall, color = accent)
+            } else {
+                LinearProgressIndicator(
+                    progress = { achievement.progress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "${achievement.value}/${achievement.target}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

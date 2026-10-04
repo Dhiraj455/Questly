@@ -24,7 +24,7 @@ class AuthFlowTest {
 
     @Test
     fun registerVerifyLoginAndMe() = testApplication {
-        application { module(overpass = FakeOverpass(emptyList()), emailSender = NoopEmailSender) }
+        application { module(emailSender = NoopEmailSender) }
         val client = createClient { install(ContentNegotiation) { json() } }
         val email = "alice@example.com"
 
@@ -66,7 +66,7 @@ class AuthFlowTest {
 
     @Test
     fun wrongPasswordIsRejected() = testApplication {
-        application { module(overpass = FakeOverpass(emptyList()), emailSender = NoopEmailSender) }
+        application { module(emailSender = NoopEmailSender) }
         val client = createClient { install(ContentNegotiation) { json() } }
         val email = "bob@example.com"
         client.post("/v1/auth/register") {

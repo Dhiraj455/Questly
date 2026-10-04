@@ -3,6 +3,7 @@ package com.example.questly.core.network
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.IOException
 
 /** Builds a single Overpass QL query fetching all quest-worthy POI types within [radiusMeters]. */
 fun buildOverpassQuery(lat: Double, lng: Double, radiusMeters: Double): String {
@@ -21,9 +22,19 @@ fun buildOverpassQuery(lat: Double, lng: Double, radiusMeters: Double): String {
     """.trimIndent()
 }
 
-/** Parses an Overpass JSON response into named, classified POIs. Unnamed or unclassifiable elements are dropped. */
-fun parseOverpassJson(json: String): List<OverpassPoi> =
-    lenientJson.decodeFromString<OverpassResponse>(json).elements.mapNotNull { it.toPoi() }
+/**
+ * Parses an Overpass JSON response into named, classified POIs. Unnamed or unclassifiable elements
+ * are dropped. Overpass answers HTTP 200 with a "remark" and no elements when a query errors or
+ * times out server-side; that's thrown so the caller can fail over to another endpoint instead of
+ * mistaking it for "no quests here".
+ */
+fun parseOverpassJson(json: String): List<OverpassPoi> {
+    val response = lenientJson.decodeFromString<OverpassResponse>(json)
+    if (response.elements.isEmpty() && response.remark != null) {
+        throw IOException("Overpass remark: ${response.remark}")
+    }
+    return response.elements.mapNotNull { it.toPoi() }
+}
 
 // Upper bound on elements Overpass returns. Set above the repository's quest cap so the RADIUS,
 // not this number, decides how many quests come back within a given area.
@@ -32,7 +43,10 @@ private const val MAX_ELEMENTS = 200
 private val lenientJson = Json { ignoreUnknownKeys = true }
 
 @Serializable
-private data class OverpassResponse(val elements: List<OverpassElement> = emptyList())
+private data class OverpassResponse(
+    val elements: List<OverpassElement> = emptyList(),
+    val remark: String? = null,
+)
 
 @Serializable
 private data class OverpassElement(

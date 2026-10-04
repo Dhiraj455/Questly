@@ -124,12 +124,16 @@ class MapViewModel @Inject constructor(
             if (!force && !shouldRequery(loc, radius)) return // recheck: another refresh may have run
             isLoading.value = true
             error.value = null
-            when (val result = checkpointRepository.refresh(loc.lat, loc.lng, radius)) {
-                is RefreshResult.Error -> error.value = result.message
-                is RefreshResult.Success -> {}
+            try {
+                when (val result = checkpointRepository.refresh(loc.lat, loc.lng, radius)) {
+                    is RefreshResult.Error -> error.value = result.message
+                    is RefreshResult.Success -> {}
+                }
+                lastQuery = Query(loc.lat, loc.lng, radius)
+            } finally {
+                // Runs even if the refresh is cancelled, so the spinner never sticks.
+                isLoading.value = false
             }
-            lastQuery = Query(loc.lat, loc.lng, radius)
-            isLoading.value = false
         }
     }
 
