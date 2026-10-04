@@ -28,12 +28,15 @@ import androidx.compose.material.icons.filled.PinDrop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,17 +56,27 @@ import com.example.questly.core.model.FeedItem
 import com.example.questly.core.model.Friend
 import com.example.questly.core.model.FriendRequest
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendsScreen(viewModel: FriendsViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // Fetch the latest friends/requests/feed whenever the screen opens (requests from others
+    // arrive while you're away), and support swipe-down to refresh.
+    LaunchedEffect(Unit) { viewModel.refresh() }
 
-    LazyColumn(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { viewModel.refresh() },
+        modifier = Modifier.fillMaxSize(),
     ) {
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         item {
             Spacer(Modifier.height(8.dp))
             FriendCodeCard(code = state.data.myCode)
@@ -80,7 +93,19 @@ fun FriendsScreen(viewModel: FriendsViewModel = hiltViewModel()) {
         if (state.data.requests.isNotEmpty()) {
             item { SectionHeader("Requests") }
             items(state.data.requests, key = { it.id }) { req ->
-                RequestRow(req, onAccept = { viewModel.accept(req.id) }, onDecline = { viewModel.decline(req.id) })
+                RequestRow(
+                    req,
+                    onAccept = {
+                        viewModel.accept(req.id) {
+                            Toast.makeText(context, "Couldn't accept — check your connection and try again", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onDecline = {
+                        viewModel.decline(req.id) {
+                            Toast.makeText(context, "Couldn't decline — try again", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                )
             }
         }
 
@@ -111,6 +136,7 @@ fun FriendsScreen(viewModel: FriendsViewModel = hiltViewModel()) {
         } else {
             items(state.feed, key = { it.id }) { FeedRow(it) }
             item { Spacer(Modifier.height(16.dp)) }
+        }
         }
     }
 }

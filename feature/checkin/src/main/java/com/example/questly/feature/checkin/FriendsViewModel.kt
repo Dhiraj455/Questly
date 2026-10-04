@@ -7,8 +7,10 @@ import com.example.questly.core.data.FriendsData
 import com.example.questly.core.data.FriendsRepository
 import com.example.questly.core.model.FeedItem
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -24,17 +26,30 @@ class FriendsViewModel @Inject constructor(
     private val repo: FriendsRepository,
 ) : ViewModel() {
 
-    init { refresh() }
-
     val state: StateFlow<FriendsUiState> =
         combine(repo.observeFriends(), repo.observeFeed()) { data, feed ->
             FriendsUiState(data, feed)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FriendsUiState())
 
-    fun refresh() = viewModelScope.launch { repo.refresh() }
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    // Declared after the properties it touches, so they're initialized before this runs.
+    init { refresh() }
+
+    fun refresh() = viewModelScope.launch {
+        _refreshing.value = true
+        try { repo.refresh() } finally { _refreshing.value = false }
+    }
+
     fun addFriend(code: String, onResult: (AddFriendResult) -> Unit) =
         viewModelScope.launch { onResult(repo.addFriend(code)) }
-    fun accept(requestId: String) = viewModelScope.launch { repo.accept(requestId) }
-    fun decline(requestId: String) = viewModelScope.launch { repo.decline(requestId) }
+
+    fun accept(requestId: String, onError: () -> Unit = {}) =
+        viewModelScope.launch { if (!repo.accept(requestId)) onError() }
+
+    fun decline(requestId: String, onError: () -> Unit = {}) =
+        viewModelScope.launch { if (!repo.decline(requestId)) onError() }
+
     fun unfriend(userId: String) = viewModelScope.launch { repo.unfriend(userId) }
 }

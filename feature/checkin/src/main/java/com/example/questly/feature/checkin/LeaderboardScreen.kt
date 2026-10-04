@@ -34,6 +34,8 @@ import com.example.questly.core.model.LeaderboardEntry
 fun LeaderboardScreen(viewModel: LeaderboardViewModel = hiltViewModel()) {
     val entries by viewModel.entries.collectAsStateWithLifecycle()
     val myId by viewModel.myUserId.collectAsStateWithLifecycle()
+    // Re-resolve "you" each time the screen opens, so it's correct after switching accounts.
+    androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refreshMyId() }
 
     Column(
         Modifier

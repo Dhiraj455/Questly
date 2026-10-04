@@ -55,8 +55,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
 import com.example.questly.core.network.QuestlyApi
+import com.example.questly.core.network.TokenStore
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -66,6 +69,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AccountViewModel @Inject constructor(
     private val api: QuestlyApi,
+    private val tokens: TokenStore,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     data class State(
@@ -84,7 +89,15 @@ class AccountViewModel @Inject constructor(
     private val _state = MutableStateFlow(State())
     val state = _state.asStateFlow()
 
-    init { load() }
+    init {
+        // Reload for whoever is signed in (and reset on sign-out), so after switching accounts the
+        // profile shows the current user — never the previous one.
+        viewModelScope.launch {
+            tokens.signedIn.collect { signedIn ->
+                if (signedIn) load() else _state.value = State(loading = false)
+            }
+        }
+    }
 
     fun load() = viewModelScope.launch {
         _state.update { it.copy(loading = true) }
@@ -117,6 +130,12 @@ class AccountViewModel @Inject constructor(
             api.unregisterDevice(token)
         }
         runCatching { api.signOut() }
+        // Forget the cached Google credential so the account chooser appears on the next sign-in
+        // instead of silently reusing the account that just signed out.
+        runCatching {
+            androidx.credentials.CredentialManager.create(appContext)
+                .clearCredentialState(androidx.credentials.ClearCredentialStateRequest())
+        }
     }
 
     fun deleteAccount(onError: () -> Unit) = viewModelScope.launch {

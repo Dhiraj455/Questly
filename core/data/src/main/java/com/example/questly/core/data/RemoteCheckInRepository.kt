@@ -4,6 +4,7 @@ import com.example.questly.core.database.CheckpointDao
 import com.example.questly.core.model.CheckIn
 import com.example.questly.core.network.CheckInRejectedException
 import com.example.questly.core.network.QuestlyApi
+import com.example.questly.core.network.TokenStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,11 +20,21 @@ import javax.inject.Singleton
 class RemoteCheckInRepository @Inject constructor(
     private val api: QuestlyApi,
     private val checkpointDao: CheckpointDao,
+    private val tokens: TokenStore,
 ) : CheckInRepository {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val history = MutableStateFlow<List<CheckIn>>(emptyList())
     private val total = MutableStateFlow(0)
-    init { scope.launch { runCatching { reload() } } }
+    init {
+        // Reload for whoever is signed in; wipe the cache on sign-out so the next account never
+        // sees the previous user's history/points.
+        scope.launch {
+            tokens.signedIn.collect { signedIn ->
+                if (signedIn) runCatching { reload() }
+                else { history.value = emptyList(); total.value = 0 }
+            }
+        }
+    }
     override fun observeCheckIns() = history.asStateFlow()
     override fun observePoints() = total.asStateFlow()
     override suspend fun recordCheckIn(checkpointId: String, userLat: Double, userLng: Double, nowMillis: Long): CheckInResult = try {

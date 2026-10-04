@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -67,13 +66,11 @@ fun DiscoverScreen(viewModel: DiscoverViewModel = hiltViewModel()) {
     Column(
         Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp),
     ) {
         Column(Modifier.padding(horizontal = 16.dp)) {
-            Spacer(Modifier.height(16.dp))
-            Text("Discover", style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(12.dp))
             Text(
                 "Events happening around you",
                 style = MaterialTheme.typography.bodyMedium,

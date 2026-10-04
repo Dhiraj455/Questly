@@ -22,8 +22,12 @@ class LeaderboardViewModel @Inject constructor(
     val entries: StateFlow<List<LeaderboardEntry>> =
         repo.leaderboard().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private val repository = repo
     private val _myUserId = MutableStateFlow<String?>(null)
     val myUserId: StateFlow<String?> = _myUserId.asStateFlow()
 
-    init { viewModelScope.launch { _myUserId.value = repo.myUserId() } }
+    init { refreshMyId() }
+
+    /** Re-fetch the current user's id (call when the screen is shown, so it's right after switching accounts). */
+    fun refreshMyId() = viewModelScope.launch { _myUserId.value = repository.myUserId() }
 }
