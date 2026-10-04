@@ -27,10 +27,16 @@ object TestDb {
             .migrate()
     }
 
-    /** Wipes all rows so each test starts clean. */
+    /** Wipes all rows so each test starts clean. Every table is listed explicitly so cleanup never
+     * depends on CASCADE reaching the newer social tables. */
     fun reset() {
         DriverManager.getConnection(container.jdbcUrl, container.username, container.password).use { c ->
-            c.createStatement().use { it.execute("TRUNCATE checkins, refresh_tokens, email_tokens, users RESTART IDENTITY CASCADE") }
+            c.createStatement().use {
+                it.execute(
+                    "TRUNCATE device_tokens, friend_requests, friendships, checkins, " +
+                        "refresh_tokens, email_tokens, users RESTART IDENTITY CASCADE",
+                )
+            }
         }
     }
 

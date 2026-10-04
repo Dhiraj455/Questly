@@ -51,8 +51,8 @@ class FriendsFlowTest {
     fun codeRequestAcceptMakesMutualFriends() = testApplication {
         application { module(emailSender = NoopEmailSender) }
         val client = jsonClient()
-        val alice = signIn(client, "a@example.com", "Alice")
-        val bob = signIn(client, "b@example.com", "Bob")
+        val alice = signIn(client, "alice.friends@example.com", "Alice")
+        val bob = signIn(client, "bob.friends@example.com", "Bob")
 
         val aliceCode = myCode(client, alice)
 
@@ -62,25 +62,27 @@ class FriendsFlowTest {
             contentType(ContentType.Application.Json)
             setBody(jsonBody("code" to aliceCode))
         }
-        assertEquals(HttpStatusCode.Created, sent.status)
+        assertEquals(HttpStatusCode.Created, sent.status, "send request: ${sent.bodyAsText()}")
 
         // Alice sees the incoming request, then accepts it.
         val before = client.get("/v1/friends") { header("Authorization", "Bearer $alice") }.bodyAsText()
-        assertTrue(before.contains("Bob"), before)
+        assertTrue(before.contains("Bob"), "alice's incoming requests: $before")
         val requestId = Regex("\"id\":\"([^\"]+)\"").find(before)!!.groupValues[1]
         val accept = client.post("/v1/friends/requests/$requestId/accept") { header("Authorization", "Bearer $alice") }
-        assertEquals(HttpStatusCode.NoContent, accept.status)
+        assertEquals(HttpStatusCode.NoContent, accept.status, "accept: ${accept.bodyAsText()}")
 
         // Both now list each other as a friend.
-        assertTrue(client.get("/v1/friends") { header("Authorization", "Bearer $alice") }.bodyAsText().contains("Bob"))
-        assertTrue(client.get("/v1/friends") { header("Authorization", "Bearer $bob") }.bodyAsText().contains("Alice"))
+        val aliceFriends = client.get("/v1/friends") { header("Authorization", "Bearer $alice") }.bodyAsText()
+        assertTrue(aliceFriends.contains("Bob"), "alice's friends: $aliceFriends")
+        val bobFriends = client.get("/v1/friends") { header("Authorization", "Bearer $bob") }.bodyAsText()
+        assertTrue(bobFriends.contains("Alice"), "bob's friends: $bobFriends")
     }
 
     @Test
     fun unknownCodeIsRejected() = testApplication {
         application { module(emailSender = NoopEmailSender) }
         val client = jsonClient()
-        val alice = signIn(client, "a@example.com", "Alice")
+        val alice = signIn(client, "carol.friends@example.com", "Carol")
         val res = client.post("/v1/friends/requests") {
             header("Authorization", "Bearer $alice")
             contentType(ContentType.Application.Json)
