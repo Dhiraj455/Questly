@@ -29,6 +29,10 @@ tags:
     description: Friend codes, requests, friendships, and the activity feed
   - name: devices
     description: FCM device-token registration for push notifications
+  - name: events
+    description: User-created events — hosting, discovery, and visibility (v5)
+  - name: chat
+    description: 1:1 and event group messaging, with block/mute/report moderation (v5)
 
 security:
   - bearerAuth: []
@@ -430,6 +434,308 @@ paths:
               schema: { $ref: '#/components/schemas/FeedPage' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  # ------------------------------------------------------------------ events (v5)
+  /events:
+    post:
+      tags: [events]
+      summary: Create an event (the caller becomes the host)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventWriteRequest' }
+      responses:
+        '201':
+          description: Event created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    get:
+      tags: [events]
+      summary: Discover published, upcoming events near a point
+      description: >
+        Returns events within radiusKm of (lat,lng), filtered to what the caller may see
+        (PUBLIC to everyone, FRIENDS to the host's friends, PRIVATE to the host). Each item
+        carries distanceMeters; results are nearest-first.
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: number, format: double } }
+        - { name: lng, in: query, required: true, schema: { type: number, format: double } }
+        - { name: radiusKm, in: query, schema: { type: number, format: double, default: 5 } }
+        - { name: category, in: query, schema: { type: string, enum: [PARK, BEACH, VIEWPOINT, LANDMARK] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: A page of nearby events
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventsPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /events/mine:
+    get:
+      tags: [events]
+      summary: Events the caller hosts (any status)
+      responses:
+        '200':
+          description: The caller's hosted events
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventsPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /events/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [events]
+      summary: Get one event (visibility enforced)
+      responses:
+        '200':
+          description: The event
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [events]
+      summary: Replace an event (host only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventWriteRequest' }
+      responses:
+        '200':
+          description: The updated event
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not the host, or the event is cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /events/{id}/cancel:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [events]
+      summary: Cancel an event (host only)
+      responses:
+        '204': { description: Cancelled }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not the host
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /events/{id}/register:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [events]
+      summary: Register (RSVP) for a free event — waitlisted if full
+      description: >
+        Free events only. Returns REGISTERED, or WAITLISTED when at capacity. Idempotent for an
+        already-active registration. NONE events (409 NO_REGISTRATION) and PAID events
+        (409 PAYMENT_REQUIRED, deferred to Milestone G) are rejected.
+      responses:
+        '200':
+          description: The caller's registration
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Registration' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not open, self-hosted, or not a free event (HOST / NOT_OPEN / NO_REGISTRATION / PAYMENT_REQUIRED)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [events]
+      summary: Cancel your registration — auto-promotes the oldest waitlisted attendee
+      responses:
+        '204': { description: Unregistered }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /events/{id}/roster:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [events]
+      summary: Attendee roster (host only)
+      responses:
+        '200':
+          description: Registered / waitlisted / attended lists
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Roster' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not the host
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ------------------------------------------------------------------ chat (v5)
+  /conversations:
+    get:
+      tags: [chat]
+      summary: The caller's conversations (DMs + event chats), newest activity first
+      responses:
+        '200':
+          description: Inbox
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationsPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /conversations/direct:
+    post:
+      tags: [chat]
+      summary: Get-or-create a DM with a friend
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties: { userId: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The conversation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Not friends, self, or blocked (NOT_FRIENDS / SELF / BLOCKED)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /events/{id}/conversation:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [chat]
+      summary: Get-or-create an event's group chat (host or registrant only)
+      responses:
+        '200':
+          description: The conversation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not a member (NOT_A_MEMBER)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /conversations/{id}/messages:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [chat]
+      summary: Message history (newest first), paged by cursor
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 30 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: A page of messages
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagesPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Not a member
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    post:
+      tags: [chat]
+      summary: Send a message (also delivered live over the chat WebSocket)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties: { body: { type: string, minLength: 1, maxLength: 2000 } }
+      responses:
+        '200':
+          description: The created message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Not a member
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /conversations/{id}/read:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [chat]
+      summary: Mark the conversation read (clears the unread count)
+      responses:
+        '204': { description: Marked read }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /conversations/{id}/mute:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [chat]
+      summary: Mute or unmute push notifications for the conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [muted]
+              properties: { muted: { type: boolean } }
+      responses:
+        '204': { description: Updated }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /users/{id}/block:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [chat]
+      summary: Block a user (hide their messages, stop delivery)
+      responses:
+        '204': { description: Blocked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [chat]
+      summary: Unblock a user
+      responses:
+        '204': { description: Unblocked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /messages/{id}/report:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [chat]
+      summary: Report a message for moderation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { reason: { type: string, maxLength: 500 } }
+      responses:
+        '204': { description: Reported }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -451,6 +757,11 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
     RateLimited:
       description: Too many requests
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Not found (or not visible to the caller)
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -624,6 +935,127 @@ components:
           type: array
           items: { $ref: '#/components/schemas/FeedItem' }
         nextCursor: { type: string, nullable: true }
+
+    EventWriteRequest:
+      type: object
+      required: [title, category, lat, lng, startsAt]
+      description: Full intended state of an event; used for both create (POST) and replace (PUT).
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 2000, default: '' }
+        category: { type: string, enum: [PARK, BEACH, VIEWPOINT, LANDMARK], description: Reuses checkpoint categories so events ride the check-in/points loop }
+        venueName: { type: string, maxLength: 120, default: '' }
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time, nullable: true, description: Must be after startsAt; null = open-ended }
+        capacity: { type: integer, minimum: 1, nullable: true, description: null = unlimited }
+        visibility: { type: string, enum: [PUBLIC, FRIENDS, PRIVATE], default: PUBLIC }
+        registrationType: { type: string, enum: [NONE, FREE, PAID], default: NONE }
+        priceCents: { type: integer, minimum: 1, nullable: true, description: Required iff registrationType=PAID }
+        currency: { type: string, minLength: 3, maxLength: 3, nullable: true, description: ISO-4217; required iff registrationType=PAID }
+        status: { type: string, enum: [DRAFT, PUBLISHED], default: PUBLISHED }
+
+    Event:
+      type: object
+      required: [id, hostId, hostDisplayName, isHost, title, description, category, venueName, lat, lng, startsAt, visibility, registrationType, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        hostId: { type: string, format: uuid }
+        hostDisplayName: { type: string }
+        isHost: { type: boolean, description: True when the caller is the host }
+        title: { type: string }
+        description: { type: string }
+        category: { type: string, enum: [PARK, BEACH, VIEWPOINT, LANDMARK] }
+        venueName: { type: string }
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time, nullable: true }
+        capacity: { type: integer, nullable: true }
+        visibility: { type: string, enum: [PUBLIC, FRIENDS, PRIVATE] }
+        registrationType: { type: string, enum: [NONE, FREE, PAID] }
+        priceCents: { type: integer, nullable: true }
+        currency: { type: string, nullable: true }
+        status: { type: string, enum: [DRAFT, PUBLISHED, CANCELLED] }
+        createdAt: { type: string, format: date-time }
+        distanceMeters: { type: number, format: double, nullable: true, description: Only set in area/discovery listings }
+        registeredCount: { type: integer, description: Number of REGISTERED attendees }
+        spotsLeft: { type: integer, nullable: true, description: capacity - registeredCount; null when unlimited }
+        viewerStatus: { type: string, nullable: true, enum: [REGISTERED, WAITLISTED, CANCELLED, ATTENDED], description: The caller's own registration status, null if not registered }
+
+    EventsPage:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/Event' }
+
+    Registration:
+      type: object
+      required: [eventId, status]
+      properties:
+        eventId: { type: string, format: uuid }
+        status: { type: string, enum: [REGISTERED, WAITLISTED, CANCELLED, ATTENDED] }
+
+    RosterEntry:
+      type: object
+      required: [userId, displayName, status, registeredAt]
+      properties:
+        userId: { type: string, format: uuid }
+        displayName: { type: string }
+        status: { type: string, enum: [REGISTERED, WAITLISTED, CANCELLED, ATTENDED] }
+        registeredAt: { type: string, format: date-time }
+
+    Roster:
+      type: object
+      required: [registered, waitlisted, attended]
+      properties:
+        registered: { type: array, items: { $ref: '#/components/schemas/RosterEntry' } }
+        waitlisted: { type: array, items: { $ref: '#/components/schemas/RosterEntry' } }
+        attended: { type: array, items: { $ref: '#/components/schemas/RosterEntry' } }
+
+    Message:
+      type: object
+      required: [id, conversationId, senderId, senderDisplayName, body, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        senderId: { type: string, format: uuid }
+        senderDisplayName: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    MessagesPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Message' }
+        nextCursor: { type: string, nullable: true }
+
+    Conversation:
+      type: object
+      required: [id, type, title, unreadCount, muted]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [DIRECT, EVENT] }
+        title: { type: string, description: Other person's name (DIRECT) or event title (EVENT) }
+        eventId: { type: string, format: uuid, nullable: true }
+        otherUserId: { type: string, format: uuid, nullable: true, description: Set for DIRECT }
+        lastMessage: { $ref: '#/components/schemas/Message' }
+        unreadCount: { type: integer }
+        muted: { type: boolean }
+
+    ConversationsPage:
+      type: object
+      required: [conversations]
+      properties:
+        conversations:
+          type: array
+          items: { $ref: '#/components/schemas/Conversation' }
 
     Error:
       type: object

@@ -69,3 +69,78 @@ object CheckIns : Table("checkins") {
     val idempotencyKey = uuid("idempotency_key")
     override val primaryKey = PrimaryKey(id)
 }
+
+object Events : Table("events") {
+    val id = uuid("id")
+    val hostId = uuid("host_id")
+    val title = text("title")
+    val description = text("description")
+    val category = text("category")
+    val venueName = text("venue_name")
+    val lat = double("lat")
+    val lng = double("lng")
+    val startsAt = timestampWithTimeZone("starts_at")
+    val endsAt = timestampWithTimeZone("ends_at").nullable()
+    val capacity = integer("capacity").nullable()
+    val visibility = text("visibility")
+    val registrationType = text("registration_type")
+    val priceCents = integer("price_cents").nullable()
+    val currency = text("currency").nullable()
+    val status = text("status")
+    val createdAt = timestampWithTimeZone("created_at")
+    val updatedAt = timestampWithTimeZone("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object EventRegistrations : Table("event_registrations") {
+    val id = uuid("id")
+    val eventId = uuid("event_id")
+    val userId = uuid("user_id")
+    val status = text("status")
+    val registeredAt = timestampWithTimeZone("registered_at")
+    val updatedAt = timestampWithTimeZone("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object Conversations : Table("conversations") {
+    val id = uuid("id")
+    val type = text("type")
+    val eventId = uuid("event_id").nullable()
+    val dmKey = text("dm_key").nullable()
+    val createdAt = timestampWithTimeZone("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object ConversationMembers : Table("conversation_members") {
+    val conversationId = uuid("conversation_id")
+    val userId = uuid("user_id")
+    val joinedAt = timestampWithTimeZone("joined_at")
+    val lastReadAt = timestampWithTimeZone("last_read_at").nullable()
+    val muted = bool("muted")
+    override val primaryKey = PrimaryKey(conversationId, userId)
+}
+
+object Messages : Table("messages") {
+    val id = uuid("id")
+    val conversationId = uuid("conversation_id")
+    val senderId = uuid("sender_id")
+    val body = text("body")
+    val createdAt = timestampWithTimeZone("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object UserBlocks : Table("user_blocks") {
+    val blockerId = uuid("blocker_id")
+    val blockedId = uuid("blocked_id")
+    val createdAt = timestampWithTimeZone("created_at")
+    override val primaryKey = PrimaryKey(blockerId, blockedId)
+}
+
+object MessageReports : Table("message_reports") {
+    val id = uuid("id")
+    val reporterId = uuid("reporter_id")
+    val messageId = uuid("message_id")
+    val reason = text("reason")
+    val createdAt = timestampWithTimeZone("created_at")
+    override val primaryKey = PrimaryKey(id)
+}

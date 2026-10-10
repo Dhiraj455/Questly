@@ -55,8 +55,9 @@ dependencies {
     testImplementation("io.ktor:ktor-server-test-host:$ktor")
     testImplementation("io.ktor:ktor-client-content-negotiation:$ktor")
     testImplementation(kotlin("test"))
-    // Integration tests against a real PostgreSQL in a container
-    testImplementation("org.testcontainers:postgresql:1.21.3")
+    // Integration tests against a real PostgreSQL in a container. 1.21.4+ negotiates Docker API
+    // v1.44 (Engine 29 dropped the v1.32 that 1.21.3 hardcoded, so older TC fails with HTTP 400).
+    testImplementation("org.testcontainers:postgresql:1.21.4")
 }
 
 application {

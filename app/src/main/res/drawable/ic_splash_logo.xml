@@ -1,0 +1,51 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+
+    <!-- White badge so the mark reads on any splash background (incl. dark mode) -->
+    <path android:fillColor="#FFFFFF" android:pathData="M6,96 a90,90 0 1,0 180,0 a90,90 0 1,0 -180,0" />
+
+    <!-- Compass ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00494B"
+        android:strokeWidth="15"
+        android:pathData="M18,96 a78,78 0 1,0 156,0 a78,78 0 1,0 -156,0" />
+
+    <!-- Four cardinal points -->
+    <path android:fillColor="#00494B" android:pathData="M96,8 L106,18 L96,28 L86,18 Z" />
+    <path android:fillColor="#00494B" android:pathData="M184,96 L174,106 L164,96 L174,86 Z" />
+    <path android:fillColor="#00494B" android:pathData="M96,184 L106,174 L96,164 L86,174 Z" />
+    <path android:fillColor="#00494B" android:pathData="M8,96 L18,106 L28,96 L18,86 Z" />
+
+    <!-- Two-tone compass needle -->
+    <path android:pathData="M129.25,53.45 L108.61,105.85 L83.39,86.15 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="129.25" android:startY="53.45"
+                android:endX="96" android:endY="100"
+                android:startColor="#FFC24B" android:endColor="#F08A1E" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M62.75,138.55 L108.61,105.85 L83.39,86.15 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="62.75" android:startY="138.55"
+                android:endX="96" android:endY="100"
+                android:startColor="#3AD3D4" android:endColor="#039FA0" />
+        </aapt:attr>
+    </path>
+
+    <!-- Location pin + dot -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#CFE0DE"
+        android:strokeWidth="1.5"
+        android:pathData="M96,60 C112.6,60 126,73.4 126,90 C126,107 112,126 96,152 C80,126 66,107 66,90 C66,73.4 79.4,60 96,60 Z" />
+    <path android:fillColor="#0A8F91" android:pathData="M84,88 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0" />
+</vector>

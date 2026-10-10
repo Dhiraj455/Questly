@@ -1,5 +1,6 @@
 package com.example.questly.feature.discover
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -21,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
@@ -28,12 +32,15 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,53 +63,165 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlin.math.roundToInt
+import com.example.questly.core.model.Event
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** In-feature navigation (the app shell has no NavController, so Discover routes internally). */
+private sealed interface DiscoverNav {
+    data object List : DiscoverNav
+    data class Detail(val event: Event) : DiscoverNav
+    data object Create : DiscoverNav
+    data class Edit(val event: Event) : DiscoverNav
+    data object Mine : DiscoverNav
+    data class Roster(val event: Event) : DiscoverNav
+}
+
 @Composable
 fun DiscoverScreen(viewModel: DiscoverViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var showFilter by remember { mutableStateOf(false) }
+    val mine by viewModel.myEvents.collectAsStateWithLifecycle()
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 24.dp),
-    ) {
-        Column(Modifier.padding(horizontal = 16.dp)) {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "Events happening around you",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-            SearchAndFilterBar(
-                query = state.query,
+    var stack by remember { mutableStateOf<List<DiscoverNav>>(listOf(DiscoverNav.List)) }
+    val current = stack.last()
+    fun push(nav: DiscoverNav) { stack = stack + nav }
+    fun pop() { if (stack.size > 1) stack = stack.dropLast(1) }
+    fun popToRoot() { stack = listOf(DiscoverNav.List) }
+
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    fun message(text: String) { scope.launch { snackbar.showSnackbar(text) } }
+
+    if (current != DiscoverNav.List) BackHandler { pop() }
+
+    Box(Modifier.fillMaxSize()) {
+        when (val nav = current) {
+            DiscoverNav.List -> DiscoverListContent(
+                state = state,
                 onQueryChange = viewModel::setQuery,
-                onFilterClick = { showFilter = true },
+                onRadiusChange = viewModel::setRadius,
+                onLoadMore = viewModel::loadMore,
+                onEventClick = { push(DiscoverNav.Detail(it)) },
+                onCreate = { push(DiscoverNav.Create) },
+                onMyEvents = { viewModel.refreshMine(); push(DiscoverNav.Mine) },
+            )
+
+            is DiscoverNav.Detail -> EventDetailScreen(
+                initialEvent = nav.event,
+                onBack = { pop() },
+                onEdit = { push(DiscoverNav.Edit(it)) },
+                onCancel = { event ->
+                    viewModel.cancel(event.id) { message(it) }
+                    message("Event cancelled")
+                    popToRoot()
+                },
+                onViewRoster = { push(DiscoverNav.Roster(it)) },
+                onRegister = viewModel::register,
+                onUnregister = viewModel::unregister,
+                onShowMessage = ::message,
+            )
+
+            DiscoverNav.Create -> EventEditScreen(
+                existing = null,
+                defaultLat = state.userLat,
+                defaultLng = state.userLng,
+                onBack = { pop() },
+                onSaved = { message("Event created"); pop() },
+                onShowMessage = ::message,
+            )
+
+            is DiscoverNav.Edit -> EventEditScreen(
+                existing = nav.event,
+                defaultLat = nav.event.lat,
+                defaultLng = nav.event.lng,
+                onBack = { pop() },
+                onSaved = { message("Changes saved"); popToRoot() },
+                onShowMessage = ::message,
+            )
+
+            DiscoverNav.Mine -> MyEventsScreen(
+                events = mine,
+                onBack = { pop() },
+                onEventClick = { push(DiscoverNav.Detail(it)) },
+            )
+
+            is DiscoverNav.Roster -> RosterScreen(
+                eventId = nav.event.id,
+                eventTitle = nav.event.title,
+                onBack = { pop() },
             )
         }
 
-        EventSectionRow(
-            title = "Recommended",
-            section = state.recommended,
-            emptyText = "No recommendations yet",
-            onLoadMore = { viewModel.loadMore(DiscoverSection.RECOMMENDED) },
-        )
-        EventSectionRow(
-            title = "Within your radius",
-            section = state.withinRadius,
-            emptyText = "Nothing here yet — widen the radius",
-            onLoadMore = { viewModel.loadMore(DiscoverSection.WITHIN_RADIUS) },
-        )
-        EventSectionRow(
-            title = "Nearby, around you",
-            section = state.nearby,
-            emptyText = "No events further out right now",
-            onLoadMore = { viewModel.loadMore(DiscoverSection.NEARBY) },
-        )
+        SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DiscoverListContent(
+    state: DiscoverUiState,
+    onQueryChange: (String) -> Unit,
+    onRadiusChange: (Double) -> Unit,
+    onLoadMore: (DiscoverSection) -> Unit,
+    onEventClick: (Event) -> Unit,
+    onCreate: () -> Unit,
+    onMyEvents: () -> Unit,
+) {
+    var showFilter by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 88.dp),
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Events happening around you",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onMyEvents) { Text("My events") }
+                }
+                Spacer(Modifier.height(8.dp))
+                SearchAndFilterBar(
+                    query = state.query,
+                    onQueryChange = onQueryChange,
+                    onFilterClick = { showFilter = true },
+                )
+                if (state.error != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        state.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+
+            EventSectionRow("Starting soon", state.soon, "No upcoming events nearby", onEventClick) {
+                onLoadMore(DiscoverSection.SOON)
+            }
+            EventSectionRow("Within your radius", state.withinRadius, "Nothing here yet — widen the radius", onEventClick) {
+                onLoadMore(DiscoverSection.WITHIN_RADIUS)
+            }
+            EventSectionRow("Nearby, around you", state.nearby, "No events further out right now", onEventClick) {
+                onLoadMore(DiscoverSection.NEARBY)
+            }
+        }
+
+        FloatingActionButton(
+            onClick = onCreate,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(20.dp)
+                .navigationBarsPadding(),
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "Create event")
+        }
     }
 
     if (showFilter) {
@@ -124,7 +244,7 @@ fun DiscoverScreen(viewModel: DiscoverViewModel = hiltViewModel()) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
-                RadiusSlider(radiusMeters = state.radiusMeters, onRadiusChange = viewModel::setRadius)
+                RadiusSlider(radiusMeters = state.radiusMeters, onRadiusChange = onRadiusChange)
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = { showFilter = false }) { Text("Done") }
@@ -203,6 +323,7 @@ private fun EventSectionRow(
     title: String,
     section: EventSection,
     emptyText: String,
+    onEventClick: (Event) -> Unit,
     onLoadMore: () -> Unit,
 ) {
     Spacer(Modifier.height(20.dp))
@@ -230,7 +351,7 @@ private fun EventSectionRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(section.events, key = { it.id }) { EventCard(it) }
+            items(section.events, key = { it.id }) { EventCard(it, onEventClick) }
             if (section.hasMore) {
                 item(key = "load-more-$title") { LoadMoreCard(onClick = onLoadMore) }
             }
@@ -239,13 +360,14 @@ private fun EventSectionRow(
 }
 
 private val CARD_WIDTH = 240.dp
-private val CARD_HEIGHT = 220.dp
+private val CARD_HEIGHT = 240.dp
 private val BANNER_HEIGHT = 120.dp
 
 @Composable
-private fun EventCard(event: Event) {
+private fun EventCard(event: Event, onClick: (Event) -> Unit) {
     Card(
-        Modifier
+        onClick = { onClick(event) },
+        modifier = Modifier
             .width(CARD_WIDTH)
             .height(CARD_HEIGHT),
         shape = RoundedCornerShape(20.dp),
@@ -265,7 +387,7 @@ private fun EventCard(event: Event) {
                     .padding(10.dp),
             ) {
                 Text(
-                    categoryLabel(event.category),
+                    cardBadge(event),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -291,20 +413,26 @@ private fun EventCard(event: Event) {
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(
-                    Icons.Filled.NearMe,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp),
-                )
-                Text(
-                    distanceLabel(event.distanceMeters),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            IconLine(Icons.Filled.CalendarMonth, dateTimeLabel(event.startsAtMillis))
+            if (event.distanceMeters != null) {
+                Spacer(Modifier.height(2.dp))
+                IconLine(Icons.Filled.NearMe, distanceLabel(event.distanceMeters))
             }
         }
+    }
+}
+
+@Composable
+private fun IconLine(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -341,6 +469,3 @@ private fun LoadMoreCard(onClick: () -> Unit) {
         }
     }
 }
-
-private fun distanceLabel(meters: Double): String =
-    if (meters < 1000) "${meters.roundToInt()} m away" else "%.1f km away".format(meters / 1000)

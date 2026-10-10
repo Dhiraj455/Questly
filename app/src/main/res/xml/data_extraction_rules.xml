@@ -1,19 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   Backup / transfer rules (API 31+). The encrypted session store is sealed with a
+   Keystore key that is not restored alongside it, so backing it up would only
+   produce an undecryptable file on the target device. Exclude it from both paths;
+   the user signs in again after a restore or transfer.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="questly_session.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="questly_session.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

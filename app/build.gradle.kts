@@ -58,6 +58,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.hilt.android)
@@ -74,6 +75,7 @@ dependencies {
     implementation(project(":feature:map"))
     implementation(project(":feature:checkin"))
     implementation(project(":feature:discover"))
+    implementation(project(":feature:chat"))
     implementation(project(":core:network"))
     // Force the 16 KB-aligned native lib (libandroidx.graphics.path.so).
     implementation(libs.androidx.graphics.path)

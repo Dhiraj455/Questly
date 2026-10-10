@@ -28,9 +28,9 @@ private const val MAX_CLIENT_CLOCK_SKEW_SECONDS = 5 * 60L
  * derives the point value from the category table — the client can never inflate its own rewards.
  */
 class CheckInService(
-    // Invoked after a check-in is recorded (userId, checkpoint title, points) so the live leaderboard
-    // can rebroadcast and friends can be notified. Default no-op.
-    private val onCheckIn: suspend (UUID, String, Int) -> Unit = { _, _, _ -> },
+    // Invoked after a check-in is recorded (userId, checkpointId, title, points) so the live leaderboard
+    // can rebroadcast, friends can be notified, and event attendance can be marked. Default no-op.
+    private val onCheckIn: suspend (UUID, String, String, Int) -> Unit = { _, _, _, _ -> },
 ) {
     private fun now() = OffsetDateTime.now(ZoneOffset.UTC)
 
@@ -93,7 +93,7 @@ class CheckInService(
             }
             CheckInDto(id.toString(), request.checkpointId, request.title, points, current.toString())
         }
-        onCheckIn(userId, request.title, points) // refresh leaderboard + notify friends
+        onCheckIn(userId, request.checkpointId, request.title, points) // leaderboard + friends + attendance
         return result
     }
 

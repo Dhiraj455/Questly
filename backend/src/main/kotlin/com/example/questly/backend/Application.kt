@@ -7,8 +7,14 @@ import com.example.questly.backend.auth.GoogleVerifier
 import com.example.questly.backend.auth.JwtConfig
 import com.example.questly.backend.auth.LoggingEmailSender
 import com.example.questly.backend.auth.authRoutes
+import com.example.questly.backend.chat.ChatHub
+import com.example.questly.backend.chat.ChatService
+import com.example.questly.backend.chat.chatRoutes
 import com.example.questly.backend.checkins.CheckInService
 import com.example.questly.backend.checkins.checkInRoutes
+import com.example.questly.backend.events.EventsService
+import com.example.questly.backend.events.RegistrationsService
+import com.example.questly.backend.events.eventRoutes
 import com.example.questly.backend.friends.FriendsService
 import com.example.questly.backend.friends.friendRoutes
 import com.example.questly.backend.leaderboard.LeaderboardHub
@@ -76,8 +82,27 @@ fun Application.module(
     val profileService = ProfileService()
     val friendsService = FriendsService()
     val pushSender = PushSender.fromEnv()
-    val checkInService = CheckInService(onCheckIn = { userId, title, points ->
+    val chatHub = ChatHub()
+    val chatService = ChatService(
+        hub = chatHub,
+        push = pushSender,
+        areFriends = { a, b -> friendsService.friendIdsOf(a).contains(b) },
+    )
+    val registrationsService = RegistrationsService(
+        push = pushSender,
+        friendIdsOf = friendsService::friendIdsOf,
+        displayNameOf = friendsService::displayNameOf,
+        // Registering for an event adds you to its group chat.
+        onRegistered = { eventId, userId -> chatService.eventConversation(userId, eventId) },
+    )
+    val eventsService = EventsService(
+        friendIdsProvider = friendsService::friendIdsOf,
+        onCancelled = registrationsService::notifyCancelled,
+    )
+    val checkInService = CheckInService(onCheckIn = { userId, checkpointId, title, points ->
         leaderboardHub.broadcast()
+        // Mark attendance if this check-in was at an event the user is registered for.
+        registrationsService.markAttended(userId, checkpointId)
         // Notify the user's friends that they just checked in.
         if (pushSender.enabled) {
             val friends = friendsService.friendIdsOf(userId)
@@ -97,6 +122,8 @@ fun Application.module(
             checkInRoutes(checkInService)
             profileRoutes(profileService)
             friendRoutes(friendsService)
+            eventRoutes(eventsService, registrationsService)
+            chatRoutes(chatService, chatHub)
             leaderboardRoutes(leaderboardHub)
             deviceRoutes()
         }

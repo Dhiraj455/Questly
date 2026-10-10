@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-mode splash background (brand dark surface). The splash logo carries its
+         own white badge, so the mark stays legible against it. -->
+    <color name="splash_background">#0E1514</color>
+</resources>

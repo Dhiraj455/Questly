@@ -3,7 +3,6 @@ package com.example.questly.backend
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationStopped
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
 import java.net.URI
@@ -35,30 +34,38 @@ private fun resolveDbConfig(): DbConfig {
 }
 
 /**
- * Wires a Hikari connection pool to PostgreSQL, runs Flyway migrations on startup, and exposes the
- * pool to Exposed. Configuration comes from env vars so no credentials live in the repo; the
- * defaults match docker-compose.yml for local development.
+ * Process-wide database: one Hikari pool + one Exposed [Database] for the whole JVM, created on first
+ * use. A server owns a single database for its entire lifetime, so there's nothing to tear down per
+ * request or per Application — the pool lives until the process exits. Connecting exactly once also
+ * keeps Exposed's global default stable when several Applications run in one JVM (e.g. one per
+ * integration test); re-registering/closing per Application left transactions bound to a stale or
+ * closed pool.
  */
-fun Application.configureDatabase() {
-    val config = resolveDbConfig()
+private object DatabasePool {
+    @Volatile private var dataSource: HikariDataSource? = null
 
-    val dataSource = HikariDataSource(
-        HikariConfig().apply {
-            jdbcUrl = config.jdbcUrl
-            username = config.user
-            password = config.password
-            driverClassName = "org.postgresql.Driver"
-            maximumPoolSize = 5
-        },
-    )
-
-    Flyway.configure()
-        .dataSource(dataSource)
-        .locations("classpath:db/migration")
-        .load()
-        .migrate()
-
-    Database.connect(dataSource)
-
-    monitor.subscribe(ApplicationStopped) { dataSource.close() }
+    @Synchronized
+    fun connectOnce() {
+        if (dataSource != null) return
+        val config = resolveDbConfig()
+        val ds = HikariDataSource(
+            HikariConfig().apply {
+                jdbcUrl = config.jdbcUrl
+                username = config.user
+                password = config.password
+                driverClassName = "org.postgresql.Driver"
+                maximumPoolSize = 5
+            },
+        )
+        Flyway.configure()
+            .dataSource(ds)
+            .locations("classpath:db/migration")
+            .load()
+            .migrate()
+        Database.connect(ds)
+        dataSource = ds
+    }
 }
+
+/** Connects the process-wide pool (idempotent) and runs migrations on first call. */
+fun Application.configureDatabase() = DatabasePool.connectOnce()

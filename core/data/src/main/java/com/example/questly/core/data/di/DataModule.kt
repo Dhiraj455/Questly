@@ -2,13 +2,17 @@ package com.example.questly.core.data.di
 
 import android.content.Context
 import androidx.room.Room
+import com.example.questly.core.data.ChatRepository
 import com.example.questly.core.data.CheckInRepository
 import com.example.questly.core.data.CheckpointRepository
+import com.example.questly.core.data.EventsRepository
 import com.example.questly.core.data.FriendsRepository
 import com.example.questly.core.data.LeaderboardRepository
 import com.example.questly.core.data.ProfileRepository
+import com.example.questly.core.data.RemoteChatRepository
 import com.example.questly.core.data.RemoteCheckInRepository
 import com.example.questly.core.data.RemoteCheckpointRepository
+import com.example.questly.core.data.RemoteEventsRepository
 import com.example.questly.core.data.RemoteFriendsRepository
 import com.example.questly.core.data.RemoteLeaderboardRepository
 import com.example.questly.core.data.RemoteProfileRepository
@@ -31,6 +35,8 @@ abstract class DataBindingsModule {
     @Binds abstract fun profileRepo(impl: RemoteProfileRepository): ProfileRepository
     @Binds abstract fun friendsRepo(impl: RemoteFriendsRepository): FriendsRepository
     @Binds abstract fun leaderboardRepo(impl: RemoteLeaderboardRepository): LeaderboardRepository
+    @Binds abstract fun eventsRepo(impl: RemoteEventsRepository): EventsRepository
+    @Binds abstract fun chatRepo(impl: RemoteChatRepository): ChatRepository
 }
 
 @Module

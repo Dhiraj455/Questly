@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Explore
@@ -32,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.questly.feature.chat.ChatScreen
 import com.example.questly.feature.checkin.FriendsScreen
 import com.example.questly.feature.checkin.LeaderboardScreen
 import com.example.questly.feature.checkin.PointsScreen
@@ -42,6 +45,7 @@ private enum class Tab(val label: String, val selectedIcon: ImageVector, val ico
     Explore("Explore", Icons.Filled.Explore, Icons.Outlined.Explore),
     Discover("Discover", Icons.Filled.LocalActivity, Icons.Outlined.LocalActivity),
     Friends("Friends", Icons.Filled.Group, Icons.Outlined.Group),
+    Chat("Chat", Icons.AutoMirrored.Filled.Chat, Icons.AutoMirrored.Outlined.Chat),
     Ranks("Ranks", Icons.Filled.Leaderboard, Icons.Outlined.Leaderboard),
     Rewards("Rewards", Icons.Filled.EmojiEvents, Icons.Outlined.EmojiEvents),
 }
@@ -96,6 +100,7 @@ fun QuestlyNavHost() {
                 Tab.Explore -> MapScreen()
                 Tab.Discover -> DiscoverScreen()
                 Tab.Friends -> FriendsScreen()
+                Tab.Chat -> ChatScreen()
                 Tab.Ranks -> LeaderboardScreen()
                 Tab.Rewards -> PointsScreen()
             }

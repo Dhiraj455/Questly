@@ -3,7 +3,9 @@ package com.example.questly.backend
 import com.example.questly.backend.auth.ApiError
 import com.example.questly.backend.auth.ApiException
 import com.example.questly.backend.auth.JwtConfig
+import com.example.questly.backend.chat.ChatError
 import com.example.questly.backend.checkins.CheckInRejected
+import com.example.questly.backend.events.EventError
 import com.example.questly.backend.friends.FriendError
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -38,6 +40,12 @@ fun Application.configureStatusPages() {
             call.respond(HttpStatusCode.Conflict, e.body)
         }
         exception<FriendError> { call, e ->
+            call.respond(HttpStatusCode.Conflict, ApiError(e.reason, e.detail))
+        }
+        exception<EventError> { call, e ->
+            call.respond(HttpStatusCode.Conflict, ApiError(e.reason, e.detail))
+        }
+        exception<ChatError> { call, e ->
             call.respond(HttpStatusCode.Conflict, ApiError(e.reason, e.detail))
         }
         exception<ApiException> { call, e ->

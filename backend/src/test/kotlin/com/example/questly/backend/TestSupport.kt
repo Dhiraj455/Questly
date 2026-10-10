@@ -34,7 +34,8 @@ object TestDb {
             c.createStatement().use {
                 it.execute(
                     "TRUNCATE device_tokens, friend_requests, friendships, checkins, " +
-                        "refresh_tokens, email_tokens, users RESTART IDENTITY CASCADE",
+                        "message_reports, messages, conversation_members, conversations, user_blocks, " +
+                        "event_registrations, events, refresh_tokens, email_tokens, users RESTART IDENTITY CASCADE",
                 )
             }
         }

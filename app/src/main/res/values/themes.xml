@@ -2,4 +2,12 @@
 <resources>
 
     <style name="Theme.Questly" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Launch theme: shows the splash, then hands off to Theme.Questly once the
+         app is ready (see MainActivity.installSplashScreen()). -->
+    <style name="Theme.Questly.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.Questly</item>
+    </style>
 </resources>

@@ -33,4 +33,5 @@ include(":core:network")
 include(":feature:checkin")
 include(":feature:map")
 include(":feature:discover")
+include(":feature:chat")
  
